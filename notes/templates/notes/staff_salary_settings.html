@@ -1,0 +1,59 @@
+{% extends 'notes/base.html' %}
+
+{% block content %}
+    <section class="page-title table-header">
+        <div>
+            <h1>{{ staff.name }}さんの給料設定</h1>
+        </div>
+        <div class="month-nav">
+            <a href="{% url 'salary_list' %}">給料へ戻る</a>
+        </div>
+    </section>
+
+    <section class="settings-panel">
+        <form method="post">
+            {% csrf_token %}
+            <label for="hourly-wage">時給</label>
+            <input id="hourly-wage" name="hourly_wage" type="number" min="0" step="1" value="{{ staff.hourly_wage }}">
+
+            <div class="salary-item-list">
+                {% for row in rows %}
+                    <div class="salary-item-row">
+                        <div>
+                            <strong>{{ row.deduction.name }}</strong>
+                            <span>{{ row.direction_label }} / {% if row.is_fixed %}固定{% else %}変動{% endif %}</span>
+                        </div>
+                        <label class="switch-row salary-active-switch" for="deduction-active-{{ row.deduction.pk }}">
+                            <span>適用</span>
+                            <input
+                                id="deduction-active-{{ row.deduction.pk }}"
+                                name="deduction_active_{{ row.deduction.pk }}"
+                                type="checkbox"
+                                {% if row.is_active %}checked{% endif %}
+                            >
+                            <b aria-hidden="true"></b>
+                        </label>
+                        {% if row.is_fixed %}
+                            <input type="number" value="{{ row.amount }}" disabled>
+                        {% else %}
+                            <input
+                                name="deduction_amount_{{ row.deduction.pk }}"
+                                type="number"
+                                min="0"
+                                step="1"
+                                value="{{ row.amount }}"
+                            >
+                        {% endif %}
+                    </div>
+                {% empty %}
+                    <p class="muted-text">給料設定で差引項目を追加してください。</p>
+                {% endfor %}
+            </div>
+
+            <div class="form-actions">
+                <a href="{% url 'salary_list' %}">キャンセル</a>
+                <button type="submit">保存</button>
+            </div>
+        </form>
+    </section>
+{% endblock %}

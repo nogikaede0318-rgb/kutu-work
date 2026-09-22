@@ -1,0 +1,99 @@
+{% extends 'notes/base.html' %}
+
+{% block content %}
+    <section class="page-title table-header">
+        <div>
+            <h1>スタッフ管理</h1>
+            <p>スタッフの追加と名前の編集ができます。</p>
+        </div>
+        <a class="button" href="{% url 'staff_create' %}">スタッフ追加</a>
+    </section>
+
+    {% if staff_rows %}
+        <div class="staff-list">
+            {% for row in staff_rows %}
+                <article class="staff-card">
+                    <div class="staff-card-body">
+                        <span>スタッフ</span>
+                        <strong>{{ row.staff.name }}</strong>
+                    </div>
+                    <div class="staff-card-actions">
+                        <a class="outline-button" href="{% url 'staff_update' row.staff.pk %}">編集</a>
+                        <button class="link-button" type="button" data-modal-target="staff-stats-{{ row.staff.pk }}">稼働状況</button>
+                    </div>
+                </article>
+
+                <dialog id="staff-stats-{{ row.staff.pk }}" class="stats-modal">
+                    <form class="modal-panel" method="dialog">
+                        <header class="modal-header">
+                            <div>
+                                <h2>{{ row.staff.name }}さんの稼働状況</h2>
+                                <p>{{ selected_year }}年の月別集計</p>
+                            </div>
+                            <button class="icon-button" type="submit" aria-label="閉じる">×</button>
+                        </header>
+
+                        <label for="year-{{ row.staff.pk }}">年</label>
+                        <select id="year-{{ row.staff.pk }}" class="year-select">
+                            {% for year in years %}
+                                <option value="{{ year }}" {% if year == selected_year %}selected{% endif %}>{{ year }}年</option>
+                            {% endfor %}
+                        </select>
+
+                        <div class="stats-table-wrap">
+                            <table class="stats-table">
+                                <thead>
+                                    <tr>
+                                        <th>月</th>
+                                        <th>予定時間</th>
+                                        <th>実働時間</th>
+                                        <th>稼働日数</th>
+                                        <th>休日日数</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for stats in row.monthly_stats %}
+                                        <tr>
+                                            <th>{{ stats.month }}月</th>
+                                            <td>{{ stats.planned_duration }}</td>
+                                            <td>
+                                                {{ stats.actual_duration }}
+                                                <span class="difference-label">{{ stats.actual_difference }}</span>
+                                            </td>
+                                            <td>{{ stats.work_days }}日</td>
+                                            <td>{{ stats.holiday_days }}日</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </form>
+                </dialog>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="empty-state">
+            <h2>スタッフがいません</h2>
+            <p>シフト表に表示するスタッフを追加してください。</p>
+            <a class="button" href="{% url 'staff_create' %}">スタッフ追加</a>
+        </div>
+    {% endif %}
+{% endblock %}
+
+{% block scripts %}
+    <script>
+        document.querySelectorAll('[data-modal-target]').forEach((button) => {
+            button.addEventListener('click', () => {
+                document.getElementById(button.dataset.modalTarget)?.showModal();
+            });
+        });
+
+        document.querySelectorAll('.year-select').forEach((select) => {
+            select.addEventListener('change', () => {
+                const url = new URL(window.location.href);
+                url.searchParams.set('year', select.value);
+                window.location.href = url.toString();
+            });
+        });
+    </script>
+{% endblock %}

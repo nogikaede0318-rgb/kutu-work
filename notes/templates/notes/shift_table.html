@@ -1,0 +1,221 @@
+{% extends 'notes/base.html' %}
+
+{% block content %}
+    <section class="page-title table-header">
+        <div>
+            <h1>{{ selected_month|date:'Y年n月' }}のシフト</h1>
+        </div>
+        <div class="shift-toolbar">
+            <div class="shift-action-nav">
+                {% if is_edit_mode %}
+                    <a class="button" href="{% url 'shift_table' %}?month={{ selected_month|date:'Y-m' }}">表示</a>
+                {% else %}
+                    <a class="button" href="{% url 'shift_table' %}?month={{ selected_month|date:'Y-m' }}&mode=edit">編集</a>
+                    <button class="print-button" type="button" data-print-button>印刷</button>
+                {% endif %}
+            </div>
+            <div class="month-nav">
+                <a href="{% url 'shift_table' %}?month={{ previous_month|date:'Y-m' }}{% if is_edit_mode %}&mode=edit{% endif %}">前月</a>
+                <a href="{% url 'shift_table' %}{% if is_edit_mode %}?mode=edit{% endif %}">今月</a>
+                <a href="{% url 'shift_table' %}?month={{ next_month|date:'Y-m' }}{% if is_edit_mode %}&mode=edit{% endif %}">翌月</a>
+            </div>
+        </div>
+    </section>
+
+    {% if staff_count %}
+        <form method="post">
+            {% csrf_token %}
+            {% if is_edit_mode %}
+                <div class="bulk-actions">
+                    <button type="submit">一括保存</button>
+                </div>
+            {% endif %}
+
+            <div class="calendar-stack">
+                {% for week in weeks %}
+                    <section class="week-panel">
+                        <table class="shift-table week-table">
+                            <thead>
+                                <tr>
+                                    <th class="staff-heading" rowspan="2">スタッフ</th>
+                                    {% for day in week.days %}
+                                        <th class="weekday-cell {{ day.class_name }}">
+                                            {{ day.date|date:'D' }}
+                                        </th>
+                                    {% endfor %}
+                                </tr>
+                                <tr>
+                                    {% for day in week.days %}
+                                        <th class="date-cell {{ day.class_name }}">
+                                            {% if day.date.month == selected_month.month %}
+                                                <a class="date-link" href="{% url 'actual_work_edit' day.url_date %}">{{ day.date|date:'j' }}</a>
+                                            {% else %}
+                                                {{ day.date|date:'j' }}
+                                            {% endif %}
+                                        </th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in week.rows %}
+                                    <tr>
+                                        <th class="staff-name">
+                                            <span class="calendar-staff-label">{{ row.staff.name }}</span>
+                                        </th>
+                                        {% for cell in row.cells %}
+                                            <td class="{{ cell.class_name }}">
+                                                {% if cell.is_current_month %}
+                                                    {% if is_edit_mode %}
+                                                        <div class="bulk-edit-cell">
+                                                            <select name="shift_type_{{ cell.field_key }}" data-shift-type-select>
+                                                                <option value="">未設定</option>
+                                                                {% for shift_type in shift_types %}
+                                                                    <option
+                                                                        value="{{ shift_type.pk }}"
+                                                                        data-color="{{ shift_type.color|default:'' }}"
+                                                                        data-code="{{ shift_type.code }}"
+                                                                        {% if cell.shift.shift_type_id == shift_type.pk %}selected{% endif %}
+                                                                    >
+                                                                        {{ shift_type.code }}{% if shift_type.name %}: {{ shift_type.name }}{% endif %}
+                                                                    </option>
+                                                                {% endfor %}
+                                                            </select>
+                                                            <input id="role_{{ cell.field_key }}" name="role_{{ cell.field_key }}" type="hidden" value="{{ cell.shift.role|default:'' }}">
+                                                            <button
+                                                                class="role-modal-button {% if cell.shift.role and cell.shift.shift_type.code != '休' %}role-modal-button-colored{% endif %}"
+                                                                type="button"
+                                                                data-role-target="role_{{ cell.field_key }}"
+                                                            >
+                                                                {{ cell.shift.role|default:'担当' }}
+                                                            </button>
+                                                        </div>
+                                                    {% elif cell.shift %}
+                                                        <a
+                                                            class="shift-chip {% if cell.shift.shift_type.code == '休' %}shift-chip-off{% endif %}"
+                                                            href="{% url 'shift_update' cell.shift.pk %}"
+                                                            {% if cell.shift.shift_type.color and cell.shift.shift_type.code != '休' %}style="background-color: {{ cell.shift.shift_type.color }};"{% endif %}
+                                                        >
+                                                            <strong>
+                                                                {% if cell.shift.shift_type.code == '休' %}
+                                                                    休
+                                                                {% else %}
+                                                                    {% if cell.shift.shift_type %}
+                                                                        <span class="type-badge">{{ cell.shift.shift_type.code }}</span>
+                                                                    {% endif %}
+                                                                    {{ cell.shift.start_time|time:'H:i' }}-{{ cell.shift.end_time|time:'H:i' }}
+                                                                {% endif %}
+                                                            </strong>
+                                                            {% if cell.shift.role and cell.shift.shift_type.code != '休' %}<span>{{ cell.shift.role }}</span>{% endif %}
+                                                        </a>
+                                                    {% else %}
+                                                        <a class="empty-cell" href="{% url 'shift_create' %}?staff={{ row.staff.pk }}&date={{ cell.day|date:'Y-m-d' }}">+</a>
+                                                    {% endif %}
+                                                {% endif %}
+                                            </td>
+                                        {% endfor %}
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </section>
+                {% endfor %}
+            </div>
+        </form>
+
+        {% if is_edit_mode %}
+            <dialog id="role-dialog" class="stats-modal">
+                <form class="modal-panel" method="dialog">
+                    <header class="modal-header">
+                        <div>
+                            <h2>担当を選択</h2>
+                        </div>
+                        <button class="icon-button" type="submit" aria-label="閉じる">×</button>
+                    </header>
+                    <div class="role-choice-list">
+                        {% for role in role_choices %}
+                            <button type="button" data-role-value="{{ role }}">{{ role }}</button>
+                        {% endfor %}
+                    </div>
+                </form>
+            </dialog>
+        {% endif %}
+    {% else %}
+        <div class="empty-state">
+            <h2>スタッフを追加してください</h2>
+            <p>シフト表を作るには、最初にスタッフ登録が必要です。</p>
+            <a class="button" href="{% url 'staff_create' %}">スタッフ追加</a>
+        </div>
+    {% endif %}
+{% endblock %}
+
+{% block scripts %}
+    <script>
+        document.querySelector('[data-print-button]')?.addEventListener('click', () => {
+            window.print();
+        });
+    </script>
+    {% if is_edit_mode %}
+        <script>
+            const roleDialog = document.querySelector('#role-dialog');
+            const roleColors = {
+                '店内・トイレ掃除': '#FFD6E7',
+                '店内掃除': '#BDE0FE',
+                '銀行・トイレ掃除': '#FFF3B0',
+            };
+            let activeRoleInput = null;
+            let activeRoleButton = null;
+
+            function applyRoleColor(button, roleValue) {
+                const color = roleColors[roleValue] || '';
+                button.style.backgroundColor = color;
+                button.classList.toggle('role-modal-button-colored', Boolean(color));
+            }
+
+            function applyShiftTypeColor(select) {
+                const selectedOption = select.options[select.selectedIndex];
+                const color = selectedOption?.dataset.color || '';
+                const code = selectedOption?.dataset.code || '';
+                const cell = select.closest('.bulk-edit-cell');
+                const roleButton = cell?.querySelector('.role-modal-button');
+                const shouldColor = color && code !== '休';
+
+                select.style.backgroundColor = shouldColor ? color : '';
+                select.classList.toggle('bulk-select-colored', Boolean(shouldColor));
+                if (roleButton) {
+                    const roleInput = cell?.querySelector('input[type="hidden"][name^="role_"]');
+                    if (code === '休') {
+                        applyRoleColor(roleButton, '');
+                    } else {
+                        applyRoleColor(roleButton, roleInput?.value || '');
+                    }
+                }
+            }
+
+            document.querySelectorAll('[data-shift-type-select]').forEach((select) => {
+                applyShiftTypeColor(select);
+                select.addEventListener('change', () => applyShiftTypeColor(select));
+            });
+
+            document.querySelectorAll('[data-role-target]').forEach((button) => {
+                const roleInput = document.getElementById(button.dataset.roleTarget);
+                applyRoleColor(button, roleInput?.value || '');
+                button.addEventListener('click', () => {
+                    activeRoleInput = document.getElementById(button.dataset.roleTarget);
+                    activeRoleButton = button;
+                    roleDialog.showModal();
+                });
+            });
+
+            document.querySelectorAll('[data-role-value]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    if (activeRoleInput && activeRoleButton) {
+                        activeRoleInput.value = button.dataset.roleValue;
+                        activeRoleButton.textContent = button.dataset.roleValue;
+                        applyRoleColor(activeRoleButton, button.dataset.roleValue);
+                    }
+                    roleDialog.close();
+                });
+            });
+        </script>
+    {% endif %}
+{% endblock %}

@@ -1,0 +1,37 @@
+{% extends 'notes/base.html' %}
+
+{% block content %}
+    <section class="form-panel">
+        <h1>{% if staff %}スタッフ編集{% else %}スタッフ追加{% endif %}</h1>
+        <form method="post">
+            {% csrf_token %}
+            <label for="management_number">管理番号</label>
+            <input
+                id="management_number"
+                name="management_number"
+                type="text"
+                inputmode="numeric"
+                pattern="[0-9]{2}"
+                maxlength="2"
+                value="{{ staff.management_number|default:'' }}"
+                placeholder="01"
+                autofocus
+            >
+            <label for="name">スタッフ名</label>
+            <input id="name" name="name" type="text" maxlength="80" value="{{ staff.name|default:'' }}" required>
+            <label for="hourly_wage">時給</label>
+            <input
+                id="hourly_wage"
+                name="hourly_wage"
+                type="number"
+                min="0"
+                step="1"
+                value="{{ staff.hourly_wage|default:0 }}"
+            >
+            <div class="form-actions">
+                <a href="{% url 'staff_list' %}">キャンセル</a>
+                <button type="submit">{% if staff %}保存{% else %}追加{% endif %}</button>
+            </div>
+        </form>
+    </section>
+{% endblock %}

@@ -1,0 +1,32 @@
+{% load static %}
+<!doctype html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>シフト管理表</title>
+    <link rel="stylesheet" href="{% static 'notes/styles.css' %}?v=role-colors-1">
+</head>
+<body>
+    <header class="app-header">
+        <a class="brand" href="{% url 'shift_table' %}">シフト管理表</a>
+        <nav class="top-nav">
+            <a class="button" href="{% url 'shift_table' %}">ホーム</a>
+            <a href="{% url 'staff_list' %}">スタッフ管理</a>
+            <a href="{% url 'shift_type_list' %}">勤務区分</a>
+            <a href="{% url 'salary_list' %}">給料</a>
+        </nav>
+    </header>
+    <main class="container">
+        {% if messages %}
+            <div class="messages">
+                {% for message in messages %}
+                    <p class="message {{ message.tags }}">{{ message }}</p>
+                {% endfor %}
+            </div>
+        {% endif %}
+        {% block content %}{% endblock %}
+    </main>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

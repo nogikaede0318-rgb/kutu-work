@@ -1,0 +1,148 @@
+{% extends 'notes/base.html' %}
+
+{% block content %}
+    <section class="form-panel">
+        <h1>{% if shift_type %}勤務区分編集{% else %}勤務区分追加{% endif %}</h1>
+        <form method="post">
+            {% csrf_token %}
+            <div class="code-name-grid">
+                <div>
+                    <label for="code">区分</label>
+                    <select id="code" name="code" required>
+                        {% for code, label in codes %}
+                            <option value="{{ code }}" {% if shift_type.code == code or not shift_type and code == 'A' %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="name">名称</label>
+                    <input id="name" name="name" type="text" maxlength="80" value="{{ shift_type.name|default:'' }}" placeholder="例: 早番、遅番、通し">
+                </div>
+            </div>
+
+            <div class="field-grid">
+                <div>
+                    <label for="start_time">開始時刻</label>
+                    <input id="start_time" name="start_time" type="time" value="{% if shift_type.start_time %}{{ shift_type.start_time|time:'H:i' }}{% endif %}">
+                </div>
+                <div>
+                    <label for="end_time">終了時刻</label>
+                    <input id="end_time" name="end_time" type="time" value="{% if shift_type.end_time %}{{ shift_type.end_time|time:'H:i' }}{% endif %}">
+                </div>
+            </div>
+
+            <div class="field-grid">
+                <div>
+                    <label for="break_minutes">休憩</label>
+                    <select id="break_minutes" name="break_minutes">
+                        <option value="">選択してください</option>
+                        {% for value, label in break_choices %}
+                            <option value="{{ value }}" {% if shift_type.break_minutes == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label>稼働時間</label>
+                    <output id="work_duration" class="calculated-output">{% if shift_type.work_minutes != None %}{{ shift_type.work_duration_label }}{% else %}-{% endif %}</output>
+                </div>
+            </div>
+
+            <label for="color">色</label>
+            <div class="color-select-row">
+                <select id="color" name="color">
+                    <option value="">選択してください</option>
+                    {% for color in colors %}
+                        <option
+                            value="{{ color.value }}"
+                            data-used="{% if color.is_used %}true{% else %}false{% endif %}"
+                            data-color="{{ color.value }}"
+                            {% if color.is_selected %}selected{% endif %}
+                            {% if color.is_used %}disabled{% endif %}
+                        >
+                            {{ color.label }}{% if color.is_used %}（使用中）{% endif %}
+                        </option>
+                    {% endfor %}
+                </select>
+                <span id="color_preview" class="color-preview" aria-hidden="true"></span>
+            </div>
+
+            <div class="form-actions">
+                <a href="{% url 'shift_type_list' %}">キャンセル</a>
+                <button type="submit">保存</button>
+            </div>
+        </form>
+    </section>
+{% endblock %}
+
+{% block scripts %}
+    <script>
+        const codeSelect = document.querySelector('#code');
+        const timeInputs = document.querySelectorAll('.field-grid input[type="time"]');
+        const startTimeInput = document.querySelector('#start_time');
+        const endTimeInput = document.querySelector('#end_time');
+        const breakSelect = document.querySelector('#break_minutes');
+        const workDurationOutput = document.querySelector('#work_duration');
+        const colorSelect = document.querySelector('#color');
+        const colorPreview = document.querySelector('#color_preview');
+
+        function updateColorPreview() {
+            const color = colorSelect.selectedOptions[0]?.dataset.color || '';
+            colorPreview.style.backgroundColor = color || 'transparent';
+        }
+
+        function timeToMinutes(value) {
+            if (!value) {
+                return null;
+            }
+            const [hours, minutes] = value.split(':').map(Number);
+            return hours * 60 + minutes;
+        }
+
+        function updateWorkDuration() {
+            const isDayOff = codeSelect.value === '休';
+            const start = timeToMinutes(startTimeInput.value);
+            const end = timeToMinutes(endTimeInput.value);
+            const breakMinutes = Number(breakSelect.value || 0);
+
+            if (isDayOff || start === null || end === null || !breakSelect.value || end <= start) {
+                workDurationOutput.value = '-';
+                return;
+            }
+
+            const workMinutes = Math.max(0, end - start - breakMinutes);
+            const hours = Math.floor(workMinutes / 60);
+            const minutes = workMinutes % 60;
+            workDurationOutput.value = minutes ? `${hours}時間${minutes}分` : `${hours}時間`;
+        }
+
+        function applyCode() {
+            const isDayOff = codeSelect.value === '休';
+            timeInputs.forEach((input) => {
+                input.disabled = isDayOff;
+                input.required = !isDayOff;
+                if (isDayOff) {
+                    input.value = '';
+                }
+            });
+            breakSelect.required = !isDayOff;
+            breakSelect.disabled = isDayOff;
+            if (isDayOff) {
+                breakSelect.value = '';
+            }
+            colorSelect.required = !isDayOff;
+            colorSelect.disabled = isDayOff;
+            if (isDayOff) {
+                colorSelect.value = '';
+            }
+            updateWorkDuration();
+            updateColorPreview();
+        }
+
+        codeSelect.addEventListener('change', applyCode);
+        startTimeInput.addEventListener('input', updateWorkDuration);
+        endTimeInput.addEventListener('input', updateWorkDuration);
+        breakSelect.addEventListener('change', updateWorkDuration);
+        colorSelect.addEventListener('change', updateColorPreview);
+        applyCode();
+    </script>
+{% endblock %}

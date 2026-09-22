@@ -1,0 +1,15 @@
+{% extends 'notes/base.html' %}
+
+{% block content %}
+    <section class="form-panel">
+        <h1>勤務区分削除</h1>
+        <p>区分{{ shift_type.code }} {{ shift_type.name }}を削除します。登録済みシフトは残ります。</p>
+        <form method="post">
+            {% csrf_token %}
+            <div class="form-actions">
+                <a href="{% url 'shift_type_list' %}">キャンセル</a>
+                <button class="danger-button" type="submit">削除</button>
+            </div>
+        </form>
+    </section>
+{% endblock %}

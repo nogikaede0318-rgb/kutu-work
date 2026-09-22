@@ -1,0 +1,121 @@
+{% extends 'notes/base.html' %}
+
+{% block content %}
+    <section class="page-title table-header">
+        <div>
+            <h1>給料設定</h1>
+        </div>
+        <div class="month-nav">
+            <a href="{% url 'salary_list' %}">給料へ戻る</a>
+        </div>
+    </section>
+
+    <section class="settings-panel">
+        <h2>差引項目を追加</h2>
+        <form method="post" class="settings-form">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="create">
+            <label for="new-name">項目名</label>
+            <input id="new-name" name="name" type="text" maxlength="80" placeholder="所得税" required>
+            <div class="salary-deduction-grid">
+                <fieldset class="choice-field">
+                    <legend>加減区分</legend>
+                    <div class="button-choice-group salary-type-choice">
+                        {% for value, label in amount_directions %}
+                            <label class="button-choice">
+                                <input type="radio" name="direction" value="{{ value }}" {% if value == 'subtract' %}checked{% endif %}>
+                                <span>{{ label }}</span>
+                            </label>
+                        {% endfor %}
+                    </div>
+                </fieldset>
+                <div>
+                    <label for="new-fixed-amount">金額</label>
+                    <input id="new-fixed-amount" name="fixed_amount" type="number" min="0" step="1" value="0">
+                </div>
+            </div>
+            <fieldset class="choice-field">
+                <legend>金額区分</legend>
+                <div class="button-choice-group salary-type-choice">
+                    {% for value, label in amount_types %}
+                        <label class="button-choice">
+                            <input type="radio" name="amount_type" value="{{ value }}" {% if value == 'fixed' %}checked{% endif %}>
+                            <span>{{ label }}</span>
+                        </label>
+                    {% endfor %}
+                </div>
+            </fieldset>
+            <div class="form-actions">
+                <button type="submit">追加</button>
+            </div>
+        </form>
+    </section>
+
+    <div class="settings-list">
+        {% for row in deduction_rows %}
+            <section class="settings-panel">
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="update">
+                    <input type="hidden" name="deduction_id" value="{{ row.deduction.pk }}">
+                    <label for="name-{{ row.deduction.pk }}">項目名</label>
+                    <input id="name-{{ row.deduction.pk }}" name="name" type="text" maxlength="80" value="{{ row.deduction.name }}" required>
+                    <div class="salary-deduction-grid">
+                        <fieldset class="choice-field">
+                            <legend>加減区分</legend>
+                            <div class="button-choice-group salary-type-choice">
+                                {% for value, label in amount_directions %}
+                                    <label class="button-choice">
+                                        <input type="radio" name="direction" value="{{ value }}" {% if row.deduction.direction == value %}checked{% endif %}>
+                                        <span>{{ label }}</span>
+                                    </label>
+                                {% endfor %}
+                            </div>
+                        </fieldset>
+                        <div>
+                            <label for="fixed-amount-{{ row.deduction.pk }}">金額</label>
+                            <input id="fixed-amount-{{ row.deduction.pk }}" name="fixed_amount" type="number" min="0" step="1" value="{{ row.deduction.fixed_amount }}">
+                        </div>
+                    </div>
+                    <fieldset class="choice-field">
+                        <legend>金額区分</legend>
+                        <div class="button-choice-group salary-type-choice">
+                            {% for value, label in amount_types %}
+                                <label class="button-choice">
+                                    <input type="radio" name="amount_type" value="{{ value }}" {% if row.deduction.amount_type == value %}checked{% endif %}>
+                                    <span>{{ label }}</span>
+                                </label>
+                            {% endfor %}
+                        </div>
+                    </fieldset>
+                    <fieldset class="choice-field">
+                        <legend>対象者</legend>
+                        <div class="staff-deduction-grid">
+                            {% for target in row.staff_targets %}
+                                <label class="switch-row" for="target-staff-{{ row.deduction.pk }}-{{ target.staff.pk }}">
+                                    <span>{{ target.staff.name }}</span>
+                                    <input
+                                        id="target-staff-{{ row.deduction.pk }}-{{ target.staff.pk }}"
+                                        name="target_staff_{{ target.staff.pk }}"
+                                        type="checkbox"
+                                        {% if target.is_active %}checked{% endif %}
+                                    >
+                                    <b aria-hidden="true"></b>
+                                </label>
+                            {% endfor %}
+                        </div>
+                    </fieldset>
+                    <div class="form-actions">
+                        <button class="outline-button danger-outline" type="submit" name="action" value="delete" formnovalidate>削除</button>
+                        <button type="submit">保存</button>
+                    </div>
+                </form>
+            </section>
+        {% empty %}
+            <div class="empty-state">
+                <h2>差引項目がありません</h2>
+                <p>所得税など、給料から差し引く項目を追加してください。</p>
+            </div>
+        {% endfor %}
+    </div>
+{% endblock %}

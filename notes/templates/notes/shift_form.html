@@ -1,0 +1,184 @@
+{% extends 'notes/base.html' %}
+
+{% block content %}
+    <style>
+        .button-choice-group {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+            width: 100%;
+        }
+
+        .button-choice {
+            min-width: 0;
+            margin: 0 !important;
+        }
+
+        .button-choice input {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .button-choice span {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 44px;
+            padding: 8px 12px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: #fff;
+            color: var(--ink);
+            font-weight: 700;
+            text-align: center;
+            white-space: nowrap;
+            cursor: pointer;
+        }
+
+        .button-choice input:checked + span {
+            border-color: var(--accent);
+            background: #ffe8ef;
+            color: #8d2547;
+            outline: 3px solid rgba(199, 59, 102, 0.18);
+        }
+
+        @media (max-width: 640px) {
+            .button-choice-group {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: 4px;
+            }
+
+            .button-choice span {
+                min-height: 40px;
+                padding: 6px 3px;
+                font-size: 0.72rem;
+            }
+        }
+    </style>
+
+    <section class="form-panel">
+        <h1>{% if shift %}シフト編集{% else %}シフト登録{% endif %}</h1>
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.META.HTTP_REFERER|default:'/' }}">
+
+            <label for="staff">スタッフ</label>
+            <select id="staff" name="staff" required>
+                <option value="">選択してください</option>
+                {% for staff in staff_members %}
+                    <option value="{{ staff.pk }}" {% if shift.staff_id == staff.pk or request.GET.staff == staff.pk|stringformat:'s' %}selected{% endif %}>{{ staff.name }}</option>
+                {% endfor %}
+            </select>
+
+            <label for="work_date">勤務日</label>
+            <input id="work_date" name="work_date" type="date" value="{% if shift %}{{ shift.work_date|date:'Y-m-d' }}{% else %}{{ request.GET.date }}{% endif %}" required>
+
+            <label for="shift_type">勤務区分</label>
+            <select id="shift_type" name="shift_type">
+                <option value="">区分なし</option>
+                {% for shift_type in shift_types %}
+                    <option
+                        value="{{ shift_type.pk }}"
+                        data-start="{{ shift_type.start_time|time:'H:i' }}"
+                        data-end="{{ shift_type.end_time|time:'H:i' }}"
+                        data-name="{{ shift_type.name }}"
+                        data-code="{{ shift_type.code }}"
+                        {% if shift.shift_type_id == shift_type.pk %}selected{% endif %}
+                    >
+                        {{ shift_type.code }}{% if shift_type.name %}: {{ shift_type.name }}{% endif %}{% if shift_type.start_time and shift_type.end_time %} {{ shift_type.start_time|time:'H:i' }}-{{ shift_type.end_time|time:'H:i' }}{% endif %}
+                    </option>
+                {% endfor %}
+            </select>
+
+            <div class="field-grid">
+                <div>
+                    <label for="start_time">開始時刻</label>
+                    <input id="start_time" name="start_time" type="time" value="{% if shift.start_time %}{{ shift.start_time|time:'H:i' }}{% endif %}">
+                </div>
+                <div>
+                    <label for="end_time">終了時刻</label>
+                    <input id="end_time" name="end_time" type="time" value="{% if shift.end_time %}{{ shift.end_time|time:'H:i' }}{% endif %}">
+                </div>
+            </div>
+
+            <fieldset class="choice-field">
+                <legend>担当</legend>
+                <div class="button-choice-group">
+                    <label class="button-choice">
+                        <input type="radio" name="role" value="店内・トイレ掃除" {% if shift.role == '店内・トイレ掃除' %}checked{% endif %}>
+                        <span>店内・トイレ掃除</span>
+                    </label>
+                    <label class="button-choice">
+                        <input type="radio" name="role" value="店内掃除" {% if shift.role == '店内掃除' %}checked{% endif %}>
+                        <span>店内掃除</span>
+                    </label>
+                    <label class="button-choice">
+                        <input type="radio" name="role" value="銀行・トイレ掃除" {% if shift.role == '銀行・トイレ掃除' %}checked{% endif %}>
+                        <span>銀行・トイレ掃除</span>
+                    </label>
+                </div>
+            </fieldset>
+
+            <label for="memo">メモ</label>
+            <input id="memo" name="memo" type="text" maxlength="160" value="{{ shift.memo|default:'' }}">
+
+            <div class="form-actions">
+                {% if shift %}
+                    <a class="danger" href="{% url 'shift_delete' shift.pk %}">削除</a>
+                {% endif %}
+                <a href="{% url 'shift_table' %}">キャンセル</a>
+                <button type="submit">保存</button>
+            </div>
+        </form>
+    </section>
+{% endblock %}
+
+{% block scripts %}
+    <script>
+        const shiftTypeSelect = document.querySelector('#shift_type');
+        const startTimeInput = document.querySelector('#start_time');
+        const endTimeInput = document.querySelector('#end_time');
+        const roleInputs = document.querySelectorAll('input[name="role"]');
+        const timeFields = document.querySelectorAll('.field-grid input[type="time"]');
+
+        function applyShiftType() {
+            const option = shiftTypeSelect?.selectedOptions[0];
+            const isDayOff = option?.dataset.code === '休';
+
+            timeFields.forEach((input) => {
+                input.disabled = isDayOff;
+                input.required = !isDayOff;
+            });
+
+            if (isDayOff) {
+                startTimeInput.value = '';
+                endTimeInput.value = '';
+            }
+            roleInputs.forEach((input) => {
+                input.disabled = isDayOff;
+                if (isDayOff) {
+                    input.checked = false;
+                }
+            });
+        }
+
+        shiftTypeSelect?.addEventListener('change', () => {
+            const option = shiftTypeSelect.selectedOptions[0];
+            if (!option || !option.value) {
+                timeFields.forEach((input) => {
+                    input.disabled = false;
+                    input.required = true;
+                });
+                return;
+            }
+            if (option.dataset.code !== '休') {
+                startTimeInput.value = option.dataset.start;
+                endTimeInput.value = option.dataset.end;
+            }
+            applyShiftType();
+        });
+
+        applyShiftType();
+    </script>
+{% endblock %}

@@ -1,0 +1,65 @@
+{% extends 'notes/base.html' %}
+
+{% block content %}
+    <section class="page-title table-header">
+        <div>
+            <h1>{{ selected_month|date:'Y年n月' }}の給料</h1>
+        </div>
+        <div class="shift-toolbar">
+            <div class="shift-action-nav">
+                <a class="button" href="{% url 'salary_settings' %}">設定</a>
+            </div>
+            <div class="month-nav">
+                <a href="{% url 'salary_list' %}?month={{ previous_month|date:'Y-m' }}">前月</a>
+                <a href="{% url 'salary_list' %}">今月</a>
+                <a href="{% url 'salary_list' %}?month={{ next_month|date:'Y-m' }}">翌月</a>
+            </div>
+        </div>
+    </section>
+
+    <div class="salary-summary">
+        <div>
+            <span>合計実働</span>
+            <strong>{{ total_duration }}</strong>
+        </div>
+        <div>
+            <span>総支給合計</span>
+            <strong>{{ total_gross_amount }}</strong>
+        </div>
+        <div>
+            <span>加減額合計</span>
+            <strong>{{ total_adjustment_amount }}</strong>
+        </div>
+        <div>
+            <span>支給合計</span>
+            <strong>{{ total_net_amount }}</strong>
+        </div>
+    </div>
+
+    <div class="salary-table-wrap">
+        <table class="salary-table">
+            <thead>
+                <tr>
+                    <th class="salary-col-staff">スタッフ</th>
+                    <th class="salary-col-time">実働時間</th>
+                    <th class="salary-col-money">総支給額</th>
+                    <th class="salary-col-money">加減額</th>
+                    <th class="salary-col-money">支給額</th>
+                    <th class="salary-col-action">設定</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                    <tr>
+                        <th class="salary-col-staff">{{ row.staff.name }}</th>
+                        <td class="salary-col-time">{{ row.work_duration }}</td>
+                        <td class="salary-col-money">{{ row.gross_amount }}</td>
+                        <td class="salary-col-money">{{ row.adjustment_amount }}</td>
+                        <td class="salary-col-money">{{ row.net_amount }}</td>
+                        <td class="salary-col-action"><a class="outline-button" href="{% url 'staff_salary_settings' row.staff.pk %}">設定</a></td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endblock %}

@@ -1,0 +1,55 @@
+{% extends 'notes/base.html' %}
+
+{% block content %}
+    <section class="page-title table-header">
+        <div>
+            <h1>{{ target_date|date:'Y年n月j日' }}の実働編集</h1>
+            <p>予定時間はそのまま残して、実際に働いた開始・終了時刻だけを保存します。</p>
+        </div>
+        <div class="month-nav">
+            <a href="{% url 'shift_table' %}?month={{ target_date|date:'Y-m' }}">シフト表へ</a>
+        </div>
+    </section>
+
+    <form method="post">
+        {% csrf_token %}
+        <div class="actual-table-wrap">
+            <table class="actual-table">
+                <thead>
+                    <tr>
+                        <th>スタッフ</th>
+                        <th>予定</th>
+                        <th>実働開始</th>
+                        <th>実働終了</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                        <tr class="{% if row.is_day_off %}actual-day-off{% endif %}">
+                            <th>{{ row.staff.name }}</th>
+                            <td>{{ row.planned_label }}</td>
+                            <td>
+                                <input
+                                    type="time"
+                                    name="actual_start_{{ row.staff.pk }}"
+                                    value="{{ row.actual_start|time:'H:i' }}"
+                                >
+                            </td>
+                            <td>
+                                <input
+                                    type="time"
+                                    name="actual_end_{{ row.staff.pk }}"
+                                    value="{{ row.actual_end|time:'H:i' }}"
+                                >
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="form-actions">
+            <a href="{% url 'shift_table' %}?month={{ target_date|date:'Y-m' }}">キャンセル</a>
+            <button type="submit">実働を保存</button>
+        </div>
+    </form>
+{% endblock %}
