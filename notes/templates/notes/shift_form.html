@@ -75,20 +75,23 @@
             <input id="work_date" name="work_date" type="date" value="{% if shift %}{{ shift.work_date|date:'Y-m-d' }}{% else %}{{ request.GET.date }}{% endif %}" required>
 
             <label for="shift_type">勤務区分</label>
-            <select id="shift_type" name="shift_type">
-                <option value="">区分なし</option>
-                {% for shift_type in shift_types %}
-                    <option
-                        value="{{ shift_type.pk }}"
-                        data-start="{{ shift_type.start_time|time:'H:i' }}"
-                        data-end="{{ shift_type.end_time|time:'H:i' }}"
-                        data-code="{{ shift_type.code }}"
-                        {% if shift.shift_type_id == shift_type.pk %}selected{% endif %}
-                    >
-                        {{ shift_type.code }}{% if shift_type.start_time and shift_type.end_time %} {{ shift_type.start_time|time:'H:i' }}-{{ shift_type.end_time|time:'H:i' }}{% endif %}
-                    </option>
-                {% endfor %}
-            </select>
+            <div class="shift-type-controls">
+                <select id="shift_type" name="shift_type">
+                    <option value="">区分なし</option>
+                    {% for shift_type in shift_types %}
+                        <option
+                            value="{{ shift_type.pk }}"
+                            data-start="{{ shift_type.start_time|time:'H:i' }}"
+                            data-end="{{ shift_type.end_time|time:'H:i' }}"
+                            data-code="{{ shift_type.code }}"
+                            {% if shift.shift_type_id == shift_type.pk %}selected{% endif %}
+                        >
+                            {{ shift_type.code }}{% if shift_type.start_time and shift_type.end_time %} {{ shift_type.start_time|time:'H:i' }}-{{ shift_type.end_time|time:'H:i' }}{% endif %}
+                        </option>
+                    {% endfor %}
+                </select>
+                <button type="button" class="day-off-button" data-day-off-button>休</button>
+            </div>
 
             <div class="field-grid">
                 <div>

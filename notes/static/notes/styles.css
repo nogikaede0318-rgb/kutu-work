@@ -406,6 +406,37 @@ button:hover {
     font-size: 0.8rem;
 }
 
+.shift-type-controls {
+    display: flex;
+    align-items: stretch;
+    gap: 4px;
+    min-width: 0;
+}
+
+.shift-type-controls select {
+    flex: 1;
+    min-width: 0;
+}
+
+.day-off-button {
+    flex: 0 0 auto;
+    padding: 0 8px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+}
+
+.day-off-button[aria-pressed="true"] {
+    border-color: var(--accent);
+    background: #ffe8ef;
+    color: var(--accent);
+}
+
+.day-off-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 .bulk-edit-cell .bulk-select-colored {
     color: var(--ink);
     border-color: rgba(42, 23, 27, 0.14);

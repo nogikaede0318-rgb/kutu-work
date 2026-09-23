@@ -72,19 +72,22 @@
                                                 {% if cell.is_current_month %}
                                                     {% if is_edit_mode %}
                                                         <div class="bulk-edit-cell">
-                                                            <select name="shift_type_{{ cell.field_key }}" data-shift-type-select>
-                                                                <option value="">未設定</option>
-                                                                {% for shift_type in shift_types %}
-                                                                    <option
-                                                                        value="{{ shift_type.pk }}"
-                                                                        data-color="{{ shift_type.color|default:'' }}"
-                                                                        data-code="{{ shift_type.code }}"
-                                                                        {% if cell.shift.shift_type_id == shift_type.pk %}selected{% endif %}
-                                                                    >
-                                                                        {{ shift_type.code }}{% if shift_type.start_time and shift_type.end_time %} ({{ shift_type.start_time|time:'H:i' }}-{{ shift_type.end_time|time:'H:i' }}){% endif %}
-                                                                    </option>
-                                                                {% endfor %}
-                                                            </select>
+                                                            <div class="shift-type-controls">
+                                                                <select name="shift_type_{{ cell.field_key }}" data-shift-type-select>
+                                                                    <option value="">未設定</option>
+                                                                    {% for shift_type in shift_types %}
+                                                                        <option
+                                                                            value="{{ shift_type.pk }}"
+                                                                            data-color="{{ shift_type.color|default:'' }}"
+                                                                            data-code="{{ shift_type.code }}"
+                                                                            {% if cell.shift.shift_type_id == shift_type.pk %}selected{% endif %}
+                                                                        >
+                                                                            {{ shift_type.code }}{% if shift_type.start_time and shift_type.end_time %} ({{ shift_type.start_time|time:'H:i' }}-{{ shift_type.end_time|time:'H:i' }}){% endif %}
+                                                                        </option>
+                                                                    {% endfor %}
+                                                                </select>
+                                                                <button type="button" class="day-off-button" data-day-off-button>休</button>
+                                                            </div>
                                                             <input id="role_{{ cell.field_key }}" name="role_{{ cell.field_key }}" type="hidden" value="{{ cell.shift.role|default:'' }}">
                                                             <button
                                                                 class="role-modal-button {% if cell.shift.role and cell.shift.shift_type.code != '休' %}role-modal-button-colored{% endif %}"
