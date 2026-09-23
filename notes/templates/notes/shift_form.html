@@ -61,7 +61,7 @@
         <h1>{% if shift %}シフト編集{% else %}シフト登録{% endif %}</h1>
         <form method="post">
             {% csrf_token %}
-            <input type="hidden" name="next" value="{{ request.META.HTTP_REFERER|default:'/' }}">
+            <input type="hidden" name="month" value="{{ return_month|date:'Y-m' }}">
 
             <label for="staff">スタッフ</label>
             <select id="staff" name="staff" required>
@@ -82,11 +82,10 @@
                         value="{{ shift_type.pk }}"
                         data-start="{{ shift_type.start_time|time:'H:i' }}"
                         data-end="{{ shift_type.end_time|time:'H:i' }}"
-                        data-name="{{ shift_type.name }}"
                         data-code="{{ shift_type.code }}"
                         {% if shift.shift_type_id == shift_type.pk %}selected{% endif %}
                     >
-                        {{ shift_type.code }}{% if shift_type.name %}: {{ shift_type.name }}{% endif %}{% if shift_type.start_time and shift_type.end_time %} {{ shift_type.start_time|time:'H:i' }}-{{ shift_type.end_time|time:'H:i' }}{% endif %}
+                        {{ shift_type.code }}{% if shift_type.start_time and shift_type.end_time %} {{ shift_type.start_time|time:'H:i' }}-{{ shift_type.end_time|time:'H:i' }}{% endif %}
                     </option>
                 {% endfor %}
             </select>
@@ -125,9 +124,9 @@
 
             <div class="form-actions">
                 {% if shift %}
-                    <a class="danger" href="{% url 'shift_delete' shift.pk %}">削除</a>
+                    <a class="danger" href="{% url 'shift_delete' shift.pk %}?month={{ return_month|date:'Y-m' }}">削除</a>
                 {% endif %}
-                <a href="{% url 'shift_table' %}">キャンセル</a>
+                <a href="{% url 'shift_table' %}?month={{ return_month|date:'Y-m' }}">キャンセル</a>
                 <button type="submit">保存</button>
             </div>
         </form>

@@ -6,8 +6,9 @@
         <p>{{ shift.staff.name }}さんの{{ shift.work_date|date:'Y年n月j日' }}{% if shift.start_time and shift.end_time %} {{ shift.start_time|time:'H:i' }}-{{ shift.end_time|time:'H:i' }}{% else %} 休{% endif %}を削除します。</p>
         <form method="post">
             {% csrf_token %}
+            <input type="hidden" name="month" value="{{ return_month|date:'Y-m' }}">
             <div class="form-actions">
-                <a href="{% url 'shift_table' %}">キャンセル</a>
+                <a href="{% url 'shift_table' %}?month={{ return_month|date:'Y-m' }}">キャンセル</a>
                 <button class="danger-button" type="submit">削除</button>
             </div>
         </form>

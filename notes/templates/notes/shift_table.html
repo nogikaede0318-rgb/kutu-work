@@ -18,6 +18,11 @@
                 <a href="{% url 'shift_table' %}?month={{ previous_month|date:'Y-m' }}{% if is_edit_mode %}&mode=edit{% endif %}">前月</a>
                 <a href="{% url 'shift_table' %}{% if is_edit_mode %}?mode=edit{% endif %}">今月</a>
                 <a href="{% url 'shift_table' %}?month={{ next_month|date:'Y-m' }}{% if is_edit_mode %}&mode=edit{% endif %}">翌月</a>
+                <select class="month-select" aria-label="表示する年月" data-month-select>
+                    {% for month in month_choices %}
+                        <option value="{% url 'shift_table' %}?month={{ month|date:'Y-m' }}{% if is_edit_mode %}&mode=edit{% endif %}"{% if month == selected_month %} selected{% endif %}>{{ month|date:'Y年n月' }}</option>
+                    {% endfor %}
+                </select>
             </div>
         </div>
     </section>
@@ -76,7 +81,7 @@
                                                                         data-code="{{ shift_type.code }}"
                                                                         {% if cell.shift.shift_type_id == shift_type.pk %}selected{% endif %}
                                                                     >
-                                                                        {{ shift_type.code }}{% if shift_type.name %}: {{ shift_type.name }}{% endif %}
+                                                                        {{ shift_type.code }}{% if shift_type.start_time and shift_type.end_time %} ({{ shift_type.start_time|time:'H:i' }}-{{ shift_type.end_time|time:'H:i' }}){% endif %}
                                                                     </option>
                                                                 {% endfor %}
                                                             </select>
@@ -150,6 +155,9 @@
 
 {% block scripts %}
     <script>
+        document.querySelector('[data-month-select]')?.addEventListener('change', (event) => {
+            window.location.assign(event.target.value);
+        });
         document.querySelector('[data-print-button]')?.addEventListener('click', () => {
             window.print();
         });

@@ -27,8 +27,8 @@ class ShiftAdmin(admin.ModelAdmin):
 
 @admin.register(ShiftType)
 class ShiftTypeAdmin(admin.ModelAdmin):
-    list_display = ('code', 'name', 'color', 'start_time', 'end_time', 'break_minutes')
-    search_fields = ('code', 'name')
+    list_display = ('code', 'color', 'start_time', 'end_time', 'break_minutes')
+    search_fields = ('code',)
 
 
 @admin.register(SalaryDeduction)

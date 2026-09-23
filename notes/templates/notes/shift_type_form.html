@@ -5,20 +5,12 @@
         <h1>{% if shift_type %}勤務区分編集{% else %}勤務区分追加{% endif %}</h1>
         <form method="post">
             {% csrf_token %}
-            <div class="code-name-grid">
-                <div>
-                    <label for="code">区分</label>
-                    <select id="code" name="code" required>
-                        {% for code, label in codes %}
-                            <option value="{{ code }}" {% if shift_type.code == code or not shift_type and code == 'A' %}selected{% endif %}>{{ label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div>
-                    <label for="name">名称</label>
-                    <input id="name" name="name" type="text" maxlength="80" value="{{ shift_type.name|default:'' }}" placeholder="例: 早番、遅番、通し">
-                </div>
-            </div>
+            <label for="code">区分</label>
+            <select id="code" name="code" required>
+                {% for code, label in codes %}
+                    <option value="{{ code }}" {% if shift_type.code == code or not shift_type and code == 'A' %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
 
             <div class="field-grid">
                 <div>

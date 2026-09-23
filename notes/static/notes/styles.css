@@ -116,6 +116,14 @@ time {
     background: var(--surface);
 }
 
+.month-nav .month-select {
+    width: auto;
+    min-width: 0;
+    min-height: 38px;
+    padding: 0 8px;
+    background: var(--surface);
+}
+
 .print-button {
     min-height: 42px;
     padding: 0 18px;
@@ -1043,13 +1051,6 @@ select:focus {
     gap: 16px;
 }
 
-.code-name-grid {
-    display: grid;
-    grid-template-columns: 140px 1fr;
-    gap: 16px;
-    align-items: flex-start;
-}
-
 .field-grid > div {
     flex: 1;
 }
@@ -1084,15 +1085,10 @@ select:focus {
     .top-nav,
     .table-header,
     .field-grid,
-    .code-name-grid,
     .note-card footer,
     .form-actions {
         align-items: stretch;
         flex-direction: column;
-    }
-
-    .code-name-grid {
-        display: flex;
     }
 
     .actions {

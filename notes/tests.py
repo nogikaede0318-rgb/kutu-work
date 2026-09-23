@@ -74,7 +74,6 @@ class ShiftViewTests(TestCase):
         staff = Staff.objects.create(name='田中', hourly_wage=1200)
         shift_type = ShiftType.objects.create(
             code='A',
-            name='早番',
             color='#FADADD',
             start_time='09:00',
             end_time='17:00',
@@ -102,7 +101,6 @@ class ShiftViewTests(TestCase):
         staff = Staff.objects.create(name='田中', hourly_wage=1200)
         shift_type = ShiftType.objects.create(
             code='A',
-            name='早番',
             color='#FADADD',
             start_time='09:00',
             end_time='17:00',
@@ -130,7 +128,6 @@ class ShiftViewTests(TestCase):
         staff = Staff.objects.create(name='田中', hourly_wage=1200)
         shift_type = ShiftType.objects.create(
             code='A',
-            name='早番',
             color='#FADADD',
             start_time='09:00',
             end_time='17:00',
@@ -225,13 +222,12 @@ class ShiftViewTests(TestCase):
         staff = Staff.objects.create(name='田中')
         shift_type = ShiftType.objects.create(
             code='A',
-            name='早番',
             color='#FADADD',
             start_time='09:00',
             end_time='17:00',
             break_minutes=60,
         )
-        holiday_type = ShiftType.objects.create(code='休', name='休み')
+        holiday_type = ShiftType.objects.create(code='休')
         Shift.objects.create(
             staff=staff,
             shift_type=shift_type,
@@ -262,7 +258,6 @@ class ShiftViewTests(TestCase):
         staff = Staff.objects.create(name='佐藤')
         shift_type = ShiftType.objects.create(
             code='A',
-            name='早番',
             color='#FADADD',
             start_time='09:00',
             end_time='17:00',
@@ -301,7 +296,6 @@ class ShiftViewTests(TestCase):
         staff = Staff.objects.create(name='佐藤')
         shift_type = ShiftType.objects.create(
             code='A',
-            name='早番',
             color='#FADADD',
             start_time='09:00',
             end_time='17:00',
@@ -330,7 +324,6 @@ class ShiftViewTests(TestCase):
         staff = Staff.objects.create(name='佐藤')
         shift_type = ShiftType.objects.create(
             code='A',
-            name='早番',
             color='#FADADD',
             start_time='09:00',
             end_time='17:00',
@@ -402,7 +395,6 @@ class ShiftViewTests(TestCase):
             reverse('shift_type_create'),
             {
                 'code': 'B',
-                'name': '遅番',
                 'color': '#FFE4CC',
                 'start_time': '17:00',
                 'end_time': '22:00',
@@ -413,14 +405,15 @@ class ShiftViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(ShiftType.objects.count(), 1)
-        self.assertContains(response, '遅番')
+        self.assertContains(response, '17:00-22:00')
+        self.assertNotContains(response, '名称')
+        self.assertEqual(str(ShiftType.objects.get()), 'B 17:00-22:00')
         self.assertEqual(ShiftType.objects.get().color, '#FFE4CC')
         self.assertEqual(ShiftType.objects.get().break_minutes, 45)
 
     def test_cannot_reuse_shift_type_color(self):
         ShiftType.objects.create(
             code='A',
-            name='早番',
             color='#FADADD',
             start_time='09:00',
             end_time='17:00',
@@ -431,7 +424,6 @@ class ShiftViewTests(TestCase):
             reverse('shift_type_create'),
             {
                 'code': 'B',
-                'name': '遅番',
                 'color': '#FADADD',
                 'start_time': '17:00',
                 'end_time': '22:00',
@@ -449,18 +441,18 @@ class ShiftViewTests(TestCase):
             reverse('shift_type_create'),
             {
                 'code': '休',
-                'name': '休み',
             },
             follow=True,
         )
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(ShiftType.objects.count(), 1)
-        self.assertContains(response, '休み')
+        self.assertContains(response, '休')
+        self.assertEqual(str(ShiftType.objects.get()), '休')
 
     def test_can_create_day_off_shift_without_time(self):
         staff = Staff.objects.create(name='山田')
-        shift_type = ShiftType.objects.create(code='休', name='休み')
+        shift_type = ShiftType.objects.create(code='休')
 
         response = self.client.post(
             reverse('shift_create'),
@@ -519,3 +511,58 @@ class ShiftViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(Shift.objects.count(), 0)
+
+
+class MonthNavigationTests(TestCase):
+    def setUp(self):
+        self.staff = Staff.objects.create(name='Test')
+        self.shift = Shift.objects.create(
+            staff=self.staff, work_date='2025-02-10',
+            start_time='09:00', end_time='17:00',
+        )
+        self.table_url = reverse('shift_table') + '?month=2025-02'
+
+    def test_delete_returns_to_shift_month_without_referrer(self):
+        response = self.client.post(reverse('shift_delete', args=[self.shift.pk]))
+        self.assertRedirects(response, self.table_url)
+        self.assertFalse(Shift.objects.filter(pk=self.shift.pk).exists())
+
+    def test_update_preserves_original_month_when_date_changes(self):
+        response = self.client.post(reverse('shift_update', args=[self.shift.pk]), {
+            'staff': self.staff.pk, 'work_date': '2025-03-10',
+            'start_time': '09:00', 'end_time': '17:00',
+        })
+        self.assertRedirects(response, self.table_url)
+        self.shift.refresh_from_db()
+        self.assertEqual(str(self.shift.work_date), '2025-03-10')
+
+    def test_create_returns_to_selected_month_after_validation_error(self):
+        url = reverse('shift_create')
+        response = self.client.post(url, {'month': '2025-02', 'staff': self.staff.pk})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'name="month" value="2025-02"')
+        response = self.client.post(url, {
+            'month': '2025-02', 'staff': self.staff.pk, 'work_date': '2025-02-12',
+            'start_time': '09:00', 'end_time': '17:00', 'next': 'https://example.com',
+        })
+        self.assertRedirects(response, self.table_url)
+
+    def test_cancel_links_preserve_month(self):
+        for name in ['shift_update', 'shift_delete']:
+            response = self.client.get(reverse(name, args=[self.shift.pk]))
+            self.assertContains(response, f'href="{self.table_url}"')
+        response = self.client.get(reverse('shift_create') + '?date=2025-02-12')
+        self.assertContains(response, f'href="{self.table_url}"')
+
+    def test_salary_settings_preserve_month(self):
+        url = reverse('staff_salary_settings', args=[self.staff.pk]) + '?month=2025-02'
+        response = self.client.get(url)
+        salary_url = reverse('salary_list') + '?month=2025-02'
+        self.assertContains(response, f'href="{salary_url}"')
+        response = self.client.post(url, {'hourly_wage': '1200'})
+        self.assertRedirects(response, salary_url)
+        response = self.client.post(reverse('salary_settings') + '?month=2025-02', {
+            'action': 'create', 'name': 'Test', 'amount_type': 'fixed',
+            'direction': 'subtract', 'fixed_amount': '100',
+        })
+        self.assertRedirects(response, reverse('salary_settings') + '?month=2025-02')

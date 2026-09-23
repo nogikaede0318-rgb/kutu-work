@@ -15,7 +15,6 @@
                 <article class="type-card {% if shift_type.code == '休' %}type-card-off{% endif %}">
                     <strong {% if shift_type.color and shift_type.code != '休' %}style="background-color: {{ shift_type.color }};"{% endif %}>{{ shift_type.code }}</strong>
                     <div>
-                        <h2>{{ shift_type.name|default:'名称なし' }}</h2>
                         <p>{% if shift_type.start_time and shift_type.end_time %}{{ shift_type.start_time|time:'H:i' }}-{{ shift_type.end_time|time:'H:i' }}{% else %}時間なし{% endif %}</p>
                         {% if shift_type.code != '休' %}
                             <p>休憩: {{ shift_type.break_minutes|default:'-' }}分 / 稼働: {{ shift_type.work_duration_label }}</p>

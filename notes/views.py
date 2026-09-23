@@ -3,6 +3,7 @@ from datetime import date, datetime, timedelta
 
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 
 from .models import (
@@ -74,6 +75,11 @@ def shift_table(request):
         {
             'weeks': weeks,
             'selected_month': selected_month,
+            'month_choices': [
+                date(year, month, 1)
+                for year in range(max(1, selected_month.year - 2), min(9999, selected_month.year + 2) + 1)
+                for month in range(1, 13)
+            ],
             'previous_month': previous_month,
             'next_month': next_month,
             'staff_count': staff_members.count(),
@@ -221,6 +227,7 @@ def salary_list(request):
 
 
 def salary_settings(request):
+    return_month = _return_month(request)
     if request.method == 'POST':
         action = request.POST.get('action', '')
         if action == 'create':
@@ -228,7 +235,7 @@ def salary_settings(request):
             if deduction:
                 deduction.save()
                 messages.success(request, '差引項目を追加しました。')
-                return redirect('salary_settings')
+                return redirect(_month_url("salary_settings", return_month))
         elif action == 'update':
             deduction = get_object_or_404(SalaryDeduction, pk=request.POST.get('deduction_id'))
             updated_deduction = _build_salary_deduction_from_request(request, deduction=deduction)
@@ -236,12 +243,12 @@ def salary_settings(request):
                 updated_deduction.save()
                 _save_deduction_targets(request, updated_deduction)
                 messages.success(request, '差引項目を更新しました。')
-                return redirect('salary_settings')
+                return redirect(_month_url("salary_settings", return_month))
         elif action == 'delete':
             deduction = get_object_or_404(SalaryDeduction, pk=request.POST.get('deduction_id'))
             deduction.delete()
             messages.success(request, '差引項目を削除しました。')
-            return redirect('salary_settings')
+            return redirect(_month_url("salary_settings", return_month))
 
     deduction_rows = [
         {
@@ -255,6 +262,7 @@ def salary_settings(request):
         request,
         'notes/salary_settings.html',
         {
+            'return_month': return_month,
             'deduction_rows': deduction_rows,
             'amount_types': DEDUCTION_AMOUNT_TYPES,
             'amount_directions': SALARY_AMOUNT_DIRECTIONS,
@@ -263,6 +271,7 @@ def salary_settings(request):
 
 
 def staff_salary_settings(request, pk):
+    return_month = _return_month(request)
     staff = get_object_or_404(Staff, pk=pk)
     deductions = SalaryDeduction.objects.all()
     staff_settings = {
@@ -299,7 +308,7 @@ def staff_salary_settings(request, pk):
                 staff_amount.amount = max(0, amount)
                 staff_amount.save()
             messages.success(request, 'スタッフ別給料設定を保存しました。')
-            return redirect('salary_list')
+            return redirect(_month_url("salary_list", return_month))
 
     rows = [
         {
@@ -316,6 +325,7 @@ def staff_salary_settings(request, pk):
         request,
         'notes/staff_salary_settings.html',
         {
+            'return_month': return_month,
             'staff': staff,
             'rows': rows,
         },
@@ -372,6 +382,7 @@ def shift_type_delete(request, pk):
 
 
 def shift_create(request):
+    return_month = _return_month(request, request.GET.get("date") or request.POST.get("work_date"))
     staff_members = Staff.objects.all()
     shift_types = ShiftType.objects.all()
     if request.method == 'POST':
@@ -389,11 +400,11 @@ def shift_create(request):
             else:
                 shift.save()
                 messages.success(request, 'シフトを登録しました。')
-            return redirect(f"{request.POST.get('next', '/')}")
+            return redirect(_month_url("shift_table", return_month))
     return render(
         request,
         'notes/shift_form.html',
-        {'shift': None, 'staff_members': staff_members, 'shift_types': shift_types},
+        {'shift': None, 'staff_members': staff_members, 'shift_types': shift_types, 'return_month': return_month},
     )
 
 
@@ -443,6 +454,7 @@ def actual_work_edit(request, work_date):
 
 def shift_update(request, pk):
     shift = get_object_or_404(Shift, pk=pk)
+    return_month = _return_month(request, shift.work_date)
     staff_members = Staff.objects.all()
     shift_types = ShiftType.objects.all()
     if request.method == 'POST':
@@ -450,21 +462,33 @@ def shift_update(request, pk):
         if updated_shift:
             updated_shift.save()
             messages.success(request, 'シフトを更新しました。')
-            return redirect('shift_table')
+            return redirect(_month_url("shift_table", return_month))
     return render(
         request,
         'notes/shift_form.html',
-        {'shift': shift, 'staff_members': staff_members, 'shift_types': shift_types},
+        {'return_month': return_month, 'shift': shift, 'staff_members': staff_members, 'shift_types': shift_types},
     )
 
 
 def shift_delete(request, pk):
     shift = get_object_or_404(Shift, pk=pk)
+    return_month = _return_month(request, shift.work_date)
     if request.method == 'POST':
         shift.delete()
         messages.success(request, 'シフトを削除しました。')
-        return redirect('shift_table')
-    return render(request, 'notes/shift_confirm_delete.html', {'shift': shift})
+        return redirect(_month_url("shift_table", return_month))
+    return render(request, 'notes/shift_confirm_delete.html', {'return_month': return_month, 'shift': shift})
+
+
+def _return_month(request, fallback_date=None):
+    value = request.POST.get('month') or request.GET.get('month')
+    if not value and fallback_date:
+        value = str(fallback_date)[:7]
+    return _parse_month(value)
+
+
+def _month_url(view_name, month):
+    return f'{reverse(view_name)}?month={month:%Y-%m}'
 
 
 def _parse_month(value):
@@ -901,7 +925,6 @@ def _save_bulk_shifts(request, first_day, last_day):
 
 def _build_shift_type_from_request(request, shift_type=None):
     code = request.POST.get('code', '').strip().upper()
-    name = request.POST.get('name', '').strip()
     color = request.POST.get('color', '').strip()
     start_time = request.POST.get('start_time', '').strip()
     end_time = request.POST.get('end_time', '').strip()
@@ -963,7 +986,6 @@ def _build_shift_type_from_request(request, shift_type=None):
     if shift_type is None:
         shift_type = ShiftType()
     shift_type.code = code
-    shift_type.name = name
     shift_type.color = None if code == '休' else color
     shift_type.start_time = None if code == '休' else parsed_start
     shift_type.end_time = None if code == '休' else parsed_end

@@ -104,7 +104,6 @@ class StaffSalaryDeduction(models.Model):
 
 class ShiftType(models.Model):
     code = models.CharField('区分', max_length=1, choices=SHIFT_TYPE_CODES, unique=True)
-    name = models.CharField('名称', max_length=80, blank=True)
     color = models.CharField('色', max_length=7, choices=SHIFT_TYPE_COLORS, unique=True, blank=True, null=True)
     start_time = models.TimeField('開始時刻', blank=True, null=True)
     end_time = models.TimeField('終了時刻', blank=True, null=True)
@@ -116,12 +115,9 @@ class ShiftType(models.Model):
         verbose_name_plural = '勤務区分'
 
     def __str__(self):
-        label = f'{self.code}: '
-        if self.name:
-            label += f'{self.name} '
         if self.start_time and self.end_time:
-            return f'{label}{self.start_time:%H:%M}-{self.end_time:%H:%M}'
-        return label.rstrip()
+            return f'{self.code} {self.start_time:%H:%M}-{self.end_time:%H:%M}'
+        return self.code
 
     @property
     def work_minutes(self):
