@@ -1356,6 +1356,16 @@ html {
     font-weight: 700;
 }
 
+.actual-changed-off {
+    background: #ffd6e7 !important;
+    font-weight: 700;
+}
+
+.actual-changed-work {
+    background: #bde0fe !important;
+    font-weight: 700;
+}
+
 @media print {
     .fixed-page-header {
         position: static;

@@ -656,15 +656,19 @@ class ActualTableTests(TestCase):
         self.assertFalse(shift.actual_differs_from_plan)
         shift.actual_start_time, shift.actual_end_time = time(9), time(17)
         self.assertFalse(shift.actual_differs_from_plan)
+        self.assertEqual(shift.actual_change_class, '')
         shift.actual_end_time = time(16)
         self.assertTrue(shift.actual_differs_from_plan)
+        self.assertEqual(shift.actual_change_class, 'actual-changed')
         shift.actual_day_off = True
+        self.assertEqual(shift.actual_change_class, 'actual-changed-off')
         self.assertEqual(shift.actual_display_label, '\u4f11')
         self.assertTrue(shift.actual_differs_from_plan)
         shift.shift_type = ShiftType(code='\u4f11')
         self.assertFalse(shift.actual_differs_from_plan)
         shift.actual_day_off = False
         self.assertTrue(shift.actual_differs_from_plan)
+        self.assertEqual(shift.actual_change_class, 'actual-changed-work')
 
     def test_actual_edit_returns_to_actual_table(self):
         staff = Staff.objects.create(name='Test')
