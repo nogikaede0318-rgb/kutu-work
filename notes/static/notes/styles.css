@@ -1203,6 +1203,53 @@ select:focus {
     display: none;
 }
 
+.view-toggle {
+    display: inline-flex;
+    flex-shrink: 0;
+    padding: 3px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: #f2eeee;
+}
+
+.view-toggle a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 58px;
+    min-height: 34px;
+    padding: 0 12px;
+    border-radius: 999px;
+    color: var(--muted);
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.view-toggle a[aria-current="page"] {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.view-toggle a:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+
+.actual-legend {
+    font-size: 0.8rem;
+    margin-top: 4px;
+}
+
+.actual-chip {
+    background: #fff;
+}
+
+.actual-changed {
+    background: #fff0c2 !important;
+    font-weight: 700;
+}
+
 @media print {
     @page {
         size: A4 landscape;

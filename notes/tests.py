@@ -590,3 +590,83 @@ class ShiftPrintTests(TestCase):
         sections = response.context['print_sections']
         self.assertIsNone(sections[0]['rows'][0]['cells'][0])
         self.assertEqual(sections[2]['rows'][0]['cells'][0], shift)
+
+
+class ActualDayOffTests(TestCase):
+    def test_day_off_preserves_plan_and_excludes_pay_then_can_be_cleared(self):
+        from .views import _actual_shift_work_minutes, _salary_shift_minutes
+        staff = Staff.objects.create(name='Test', hourly_wage=1200)
+        shift = Shift.objects.create(staff=staff, work_date='2025-03-01', start_time='09:00', end_time='17:00')
+        url = reverse('actual_work_edit', args=['2025-03-01'])
+        response = self.client.post(url, {f'actual_day_off_{staff.pk}': '1'}, follow=True)
+        self.assertEqual(response.status_code, 200)
+        shift.refresh_from_db()
+        self.assertTrue(shift.actual_day_off)
+        self.assertEqual(str(shift.start_time), '09:00:00')
+        self.assertIsNone(shift.actual_start_time)
+        self.assertEqual(_actual_shift_work_minutes(shift, 480), 0)
+        self.assertEqual(_salary_shift_minutes(shift), 0)
+        self.assertContains(response, 'aria-pressed="true"')
+        self.assertIsNone(response.context['rows'][0]['actual_start'])
+        self.client.post(url, {
+            f'actual_day_off_{staff.pk}': '0',
+            f'actual_start_{staff.pk}': '10:00', f'actual_end_{staff.pk}': '16:00',
+        })
+        shift.refresh_from_db()
+        self.assertFalse(shift.actual_day_off)
+        self.assertEqual(_salary_shift_minutes(shift), 360)
+
+    def test_day_off_is_not_saved_when_another_row_is_invalid(self):
+        staff = Staff.objects.create(name='Test')
+        other = Staff.objects.create(name='Other')
+        shift = Shift.objects.create(staff=staff, work_date='2025-03-01', start_time='09:00', end_time='17:00')
+        response = self.client.post(reverse('actual_work_edit', args=['2025-03-01']), {
+            f'actual_day_off_{staff.pk}': '1', f'actual_start_{other.pk}': '09:00',
+        })
+        shift.refresh_from_db()
+        self.assertFalse(shift.actual_day_off)
+        self.assertContains(response, 'aria-pressed="true"')
+
+
+class ActualTableTests(TestCase):
+    def test_actual_display_and_print_use_registered_times_without_category(self):
+        staff = Staff.objects.create(name='Test')
+        shift_type = ShiftType.objects.create(code='A')
+        shift = Shift.objects.create(
+            staff=staff, shift_type=shift_type, work_date='2025-03-01',
+            start_time='09:00', end_time='17:00', actual_start_time='10:00', actual_end_time='16:00',
+        )
+        response = self.client.get(reverse('shift_table'), {'month': '2025-03', 'view': 'actual'})
+        self.assertContains(response, '10:00-16:00', count=2)
+        self.assertNotContains(response, '09:00-17:00')
+        self.assertNotContains(response, 'type-badge')
+        self.assertContains(response, 'class="print-shift-table"', count=3)
+        self.assertTrue(response.context['print_sections'][0]['rows'][0]['cells'][0].actual_differs_from_plan)
+        self.assertContains(response, '?month=2025-04&view=actual')
+        response = self.client.get(reverse('shift_table'), {'month': '2025-03'})
+        self.assertContains(response, '09:00-17:00')
+        self.assertNotContains(response, '10:00-16:00')
+
+    def test_actual_difference_covers_unregistered_matching_changed_and_day_off(self):
+        from datetime import time
+        shift = Shift(start_time=time(9), end_time=time(17))
+        self.assertEqual(shift.actual_display_label, '\u672a\u767b\u9332')
+        self.assertFalse(shift.actual_differs_from_plan)
+        shift.actual_start_time, shift.actual_end_time = time(9), time(17)
+        self.assertFalse(shift.actual_differs_from_plan)
+        shift.actual_end_time = time(16)
+        self.assertTrue(shift.actual_differs_from_plan)
+        shift.actual_day_off = True
+        self.assertEqual(shift.actual_display_label, '\u4f11')
+        self.assertTrue(shift.actual_differs_from_plan)
+        shift.shift_type = ShiftType(code='\u4f11')
+        self.assertFalse(shift.actual_differs_from_plan)
+        shift.actual_day_off = False
+        self.assertTrue(shift.actual_differs_from_plan)
+
+    def test_actual_edit_returns_to_actual_table(self):
+        staff = Staff.objects.create(name='Test')
+        url = reverse('actual_work_edit', args=['2025-03-01']) + '?view=actual'
+        response = self.client.post(url, {f'actual_day_off_{staff.pk}': '1'}, follow=True)
+        self.assertRedirects(response, url)
+        self.assertContains(response, reverse('shift_table') + '?month=2025-03&view=actual')

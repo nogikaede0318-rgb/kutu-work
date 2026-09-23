@@ -27,7 +27,8 @@ def shift_table(request):
     last_day = selected_month.replace(day=calendar.monthrange(selected_month.year, selected_month.month)[1])
     previous_month = (first_day - timedelta(days=1)).replace(day=1)
     next_month = (last_day + timedelta(days=1)).replace(day=1)
-    is_edit_mode = request.GET.get('mode') == 'edit'
+    is_actual_view = request.GET.get('view') == 'actual'
+    is_edit_mode = request.GET.get('mode') == 'edit' and not is_actual_view
 
     if request.method == 'POST':
         _save_bulk_shifts(request, first_day, last_day)
@@ -100,6 +101,7 @@ def shift_table(request):
             'next_month': next_month,
             'staff_count': staff_members.count(),
             'is_edit_mode': is_edit_mode,
+            'is_actual_view': is_actual_view,
             'shift_types': shift_types,
             'role_choices': role_choices,
         },
@@ -440,13 +442,18 @@ def actual_work_edit(request, work_date):
     if request.method == 'POST':
         if _save_actual_work_times(request, target_date, staff_members, shifts):
             messages.success(request, '実働時間を保存しました。')
-            return redirect('actual_work_edit', work_date=f'{target_date:%Y-%m-%d}')
+            return redirect(reverse('actual_work_edit', kwargs={'work_date': f'{target_date:%Y-%m-%d}'}) + ('?view=actual' if request.GET.get('view') == 'actual' else ''))
 
     rows = []
     for staff in staff_members:
         shift = shifts.get(staff.id)
         initial_start = shift.actual_start_time or shift.start_time if shift else None
         initial_end = shift.actual_end_time or shift.end_time if shift else None
+        actual_day_off = bool(shift and shift.actual_day_off)
+        if request.method == 'POST':
+            actual_day_off = request.POST.get(f'actual_day_off_{staff.pk}') == '1'
+        if actual_day_off:
+            initial_start = initial_end = None
         rows.append(
             {
                 'staff': staff,
@@ -454,6 +461,7 @@ def actual_work_edit(request, work_date):
                 'is_day_off': shift.shift_type.code == '休' if shift and shift.shift_type else False,
                 'planned_label': _shift_time_label(shift),
                 'actual_start': initial_start,
+                'actual_day_off': actual_day_off,
                 'actual_end': initial_end,
             }
         )
@@ -697,6 +705,8 @@ def _shift_work_minutes(shift):
 
 
 def _actual_shift_work_minutes(shift, fallback_minutes):
+    if shift.actual_day_off:
+        return 0
     if not shift.actual_start_time or not shift.actual_end_time:
         return fallback_minutes
     break_minutes = shift.shift_type.break_minutes if shift.shift_type and shift.shift_type.break_minutes else 0
@@ -859,9 +869,14 @@ def _save_actual_work_times(request, work_date, staff_members, existing_shifts):
         end_value = request.POST.get(f'actual_end_{staff.id}', '').strip()
         shift = existing_shifts.get(staff.id)
 
+        if request.POST.get(f'actual_day_off_{staff.id}') == '1':
+            shift = shift or Shift(staff=staff, work_date=work_date)
+            pending_updates.append((shift, None, None, True))
+            continue
+
         if not start_value and not end_value:
             if shift:
-                pending_updates.append((shift, None, None))
+                pending_updates.append((shift, None, None, False))
             continue
 
         if not start_value or not end_value:
@@ -885,12 +900,13 @@ def _save_actual_work_times(request, work_date, staff_members, existing_shifts):
         if shift is None:
             shift = Shift(staff=staff, work_date=work_date)
             existing_shifts[staff.id] = shift
-        pending_updates.append((shift, actual_start, actual_end))
+        pending_updates.append((shift, actual_start, actual_end, False))
 
     if has_error:
         return False
 
-    for shift, actual_start, actual_end in pending_updates:
+    for shift, actual_start, actual_end, actual_day_off in pending_updates:
+        shift.actual_day_off = actual_day_off
         shift.actual_start_time = actual_start
         shift.actual_end_time = actual_end
         shift.save()

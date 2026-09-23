@@ -3,24 +3,29 @@
 {% block content %}
     <section class="page-title table-header">
         <div>
-            <h1>{{ selected_month|date:'Y年n月' }}のシフト</h1>
+            <h1>{{ selected_month|date:'Y年n月' }}のシフト（{% if is_actual_view %}実働{% else %}予定{% endif %}）</h1>
+            {% if is_actual_view %}<div class="actual-legend">※：予定から変更／未登録：実働の入力なし</div>{% endif %}
         </div>
         <div class="shift-toolbar">
             <div class="shift-action-nav">
+                <nav class="view-toggle" aria-label="予定・実働の切り替え">
+                    <a href="{% url 'shift_table' %}?month={{ selected_month|date:'Y-m' }}"{% if not is_actual_view %} aria-current="page"{% endif %}>予定</a>
+                    <a href="{% url 'shift_table' %}?month={{ selected_month|date:'Y-m' }}&view=actual"{% if is_actual_view %} aria-current="page"{% endif %}>実働</a>
+                </nav>
                 {% if is_edit_mode %}
                     <a class="button" href="{% url 'shift_table' %}?month={{ selected_month|date:'Y-m' }}">表示</a>
                 {% else %}
-                    <a class="button" href="{% url 'shift_table' %}?month={{ selected_month|date:'Y-m' }}&mode=edit">編集</a>
+                    {% if not is_actual_view %}<a class="button" href="{% url 'shift_table' %}?month={{ selected_month|date:'Y-m' }}&mode=edit">編集</a>{% endif %}
                     <button class="print-button" type="button" data-print-button>印刷</button>
                 {% endif %}
             </div>
             <div class="month-nav">
-                <a href="{% url 'shift_table' %}?month={{ previous_month|date:'Y-m' }}{% if is_edit_mode %}&mode=edit{% endif %}">前月</a>
-                <a href="{% url 'shift_table' %}{% if is_edit_mode %}?mode=edit{% endif %}">今月</a>
-                <a href="{% url 'shift_table' %}?month={{ next_month|date:'Y-m' }}{% if is_edit_mode %}&mode=edit{% endif %}">翌月</a>
+                <a href="{% url 'shift_table' %}?month={{ previous_month|date:'Y-m' }}{% if is_edit_mode %}&mode=edit{% endif %}{% if is_actual_view %}&view=actual{% endif %}">前月</a>
+                <a href="{% url 'shift_table' %}{% if is_edit_mode %}?mode=edit{% elif is_actual_view %}?view=actual{% endif %}">今月</a>
+                <a href="{% url 'shift_table' %}?month={{ next_month|date:'Y-m' }}{% if is_edit_mode %}&mode=edit{% endif %}{% if is_actual_view %}&view=actual{% endif %}">翌月</a>
                 <select class="month-select" aria-label="表示する年月" data-month-select>
                     {% for month in month_choices %}
-                        <option value="{% url 'shift_table' %}?month={{ month|date:'Y-m' }}{% if is_edit_mode %}&mode=edit{% endif %}"{% if month == selected_month %} selected{% endif %}>{{ month|date:'Y年n月' }}</option>
+                        <option value="{% url 'shift_table' %}?month={{ month|date:'Y-m' }}{% if is_edit_mode %}&mode=edit{% endif %}{% if is_actual_view %}&view=actual{% endif %}"{% if month == selected_month %} selected{% endif %}>{{ month|date:'Y年n月' }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -53,7 +58,7 @@
                                     {% for day in week.days %}
                                         <th class="date-cell {{ day.class_name }}">
                                             {% if day.date.month == selected_month.month %}
-                                                <a class="date-link" href="{% url 'actual_work_edit' day.url_date %}">{{ day.date|date:'j' }}</a>
+                                                <a class="date-link" href="{% url 'actual_work_edit' day.url_date %}{% if is_actual_view %}?view=actual{% endif %}">{{ day.date|date:'j' }}</a>
                                             {% else %}
                                                 {{ day.date|date:'j' }}
                                             {% endif %}
@@ -97,6 +102,10 @@
                                                                 {{ cell.shift.role|default:'担当' }}
                                                             </button>
                                                         </div>
+                                                    {% elif is_actual_view %}
+                                                        <a class="shift-chip actual-chip {% if cell.shift.actual_differs_from_plan %}actual-changed{% endif %}" href="{% url 'actual_work_edit' cell.day|date:'Y-m-d' %}?view=actual">
+                                                            <strong>{{ cell.shift.actual_display_label|default:'未登録' }}{% if cell.shift.actual_differs_from_plan %} ※{% endif %}</strong>
+                                                        </a>
                                                     {% elif cell.shift %}
                                                         <a
                                                             class="shift-chip {% if cell.shift.shift_type.code == '休' %}shift-chip-off{% endif %}"

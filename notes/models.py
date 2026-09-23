@@ -153,6 +153,25 @@ class Shift(models.Model):
     end_time = models.TimeField('終了時刻', blank=True, null=True)
     actual_start_time = models.TimeField('実働開始時刻', blank=True, null=True)
     actual_end_time = models.TimeField('実働終了時刻', blank=True, null=True)
+    actual_day_off = models.BooleanField('実働休み', default=False)
+
+    @property
+    def actual_display_label(self):
+        if self.actual_day_off:
+            return '休'
+        if self.actual_start_time and self.actual_end_time:
+            return f'{self.actual_start_time:%H:%M}-{self.actual_end_time:%H:%M}'
+        return '未登録'
+
+    @property
+    def actual_differs_from_plan(self):
+        planned_off = bool(self.shift_type and self.shift_type.code == '休')
+        if self.actual_day_off:
+            return not planned_off
+        if self.actual_start_time and self.actual_end_time:
+            return planned_off or (self.actual_start_time, self.actual_end_time) != (self.start_time, self.end_time)
+        return False
+
     role = models.CharField('担当', max_length=80, blank=True)
     memo = models.CharField('メモ', max_length=160, blank=True)
     created_at = models.DateTimeField('作成日時', auto_now_add=True)

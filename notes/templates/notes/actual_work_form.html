@@ -4,10 +4,10 @@
     <section class="page-title table-header">
         <div>
             <h1>{{ target_date|date:'Y年n月j日' }}の実働編集</h1>
-            <p>予定時間はそのまま残して、実際に働いた開始・終了時刻だけを保存します。</p>
+            <p>予定時間はそのまま残して、実際に働いた時刻や休みを保存します。「休」をもう一度押すと解除できます。</p>
         </div>
         <div class="month-nav">
-            <a href="{% url 'shift_table' %}?month={{ target_date|date:'Y-m' }}">シフト表へ</a>
+            <a href="{% url 'shift_table' %}?month={{ target_date|date:'Y-m' }}{% if request.GET.view == 'actual' %}&view=actual{% endif %}">シフト表へ</a>
         </div>
     </section>
 
@@ -21,11 +21,12 @@
                         <th>予定</th>
                         <th>実働開始</th>
                         <th>実働終了</th>
+                        <th>休み</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for row in rows %}
-                        <tr class="{% if row.is_day_off %}actual-day-off{% endif %}">
+                        <tr class="{% if row.is_day_off or row.actual_day_off %}actual-day-off{% endif %}" data-actual-row>
                             <th>{{ row.staff.name }}</th>
                             <td>{{ row.planned_label }}</td>
                             <td>
@@ -33,6 +34,7 @@
                                     type="time"
                                     name="actual_start_{{ row.staff.pk }}"
                                     value="{{ row.actual_start|time:'H:i' }}"
+                                    {% if row.actual_day_off %}disabled{% endif %}
                                 >
                             </td>
                             <td>
@@ -40,7 +42,12 @@
                                     type="time"
                                     name="actual_end_{{ row.staff.pk }}"
                                     value="{{ row.actual_end|time:'H:i' }}"
+                                    {% if row.actual_day_off %}disabled{% endif %}
                                 >
+                            </td>
+                            <td>
+                                <input type="hidden" name="actual_day_off_{{ row.staff.pk }}" value="{% if row.actual_day_off %}1{% else %}0{% endif %}" data-actual-day-off>
+                                <button type="button" class="day-off-button" data-actual-off-button aria-pressed="{% if row.actual_day_off %}true{% else %}false{% endif %}">休</button>
                             </td>
                         </tr>
                     {% endfor %}
@@ -48,8 +55,33 @@
             </table>
         </div>
         <div class="form-actions">
-            <a href="{% url 'shift_table' %}?month={{ target_date|date:'Y-m' }}">キャンセル</a>
+            <a href="{% url 'shift_table' %}?month={{ target_date|date:'Y-m' }}{% if request.GET.view == 'actual' %}&view=actual{% endif %}">キャンセル</a>
             <button type="submit">実働を保存</button>
         </div>
     </form>
+{% endblock %}
+
+{% block scripts %}
+    <script>
+        document.querySelectorAll('[data-actual-off-button]').forEach((button) => {
+            const row = button.closest('[data-actual-row]');
+            const state = row.querySelector('[data-actual-day-off]');
+            const inputs = row.querySelectorAll('input[type="time"]');
+            button.addEventListener('click', () => {
+                const isOff = state.value !== '1';
+                state.value = isOff ? '1' : '0';
+                button.setAttribute('aria-pressed', String(isOff));
+                row.classList.toggle('actual-day-off', isOff);
+                inputs.forEach((input) => {
+                    input.disabled = isOff;
+                    if (isOff) {
+                        input.dataset.previousValue = input.value;
+                        input.value = '';
+                    } else {
+                        input.value = input.dataset.previousValue || '';
+                    }
+                });
+            });
+        });
+    </script>
 {% endblock %}

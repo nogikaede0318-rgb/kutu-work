@@ -19,8 +19,10 @@
                     <tr>
                         <th scope="row">{{ row.staff.name }}</th>
                         {% for shift in row.cells %}
-                            <td {% if shift.shift_type.code == '休' %}class="print-day-off"{% elif shift.shift_type.color %}style="background-color: {{ shift.shift_type.color }};"{% endif %}>
-                                {% if shift %}
+                            <td {% if is_actual_view %}class="{% if shift.actual_differs_from_plan %}actual-changed{% endif %}"{% elif shift.shift_type.code == '休' %}class="print-day-off"{% elif shift.shift_type.color %}style="background-color: {{ shift.shift_type.color }};"{% endif %}>
+                                {% if is_actual_view %}
+                                    <div class="print-shift-time">{{ shift.actual_display_label|default:'未登録' }}{% if shift.actual_differs_from_plan %} ※{% endif %}</div>
+                                {% elif shift %}
                                     {% if shift.shift_type.code == '休' %}
                                         休
                                     {% else %}
