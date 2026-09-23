@@ -34,4 +34,5 @@
     };
     new ResizeObserver(updateHeight).observe(header);
     updateHeight();
+    document.body.classList.add('has-fixed-header');
 })();

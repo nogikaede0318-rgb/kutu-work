@@ -1210,6 +1210,45 @@ select:focus {
     box-shadow: 0 2px 5px rgba(42, 23, 27, 0.08);
 }
 
+@media screen {
+    /* Let table headings stick to the viewport, bounded by their own table. */
+    .week-panel,
+    .actual-table-wrap {
+        overflow: visible;
+    }
+
+    .week-table,
+    .actual-table {
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+
+    .week-table thead,
+    .actual-table thead {
+        position: sticky;
+        top: var(--fixed-header-height, 0px);
+        z-index: 20;
+        background: #f3f4f6;
+        box-shadow: 0 2px 0 var(--line);
+    }
+
+    .actual-table thead th {
+        color: var(--ink);
+        border-bottom: 1px solid var(--line);
+    }
+
+    body.has-fixed-header {
+        padding-top: var(--fixed-header-height);
+    }
+
+    .has-fixed-header .fixed-page-header {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+    }
+}
+
 .fixed-page-controls {
     width: min(1280px, calc(100% - 32px));
     margin: 0 auto;

@@ -5,7 +5,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>シフト管理表</title>
-    <link rel="stylesheet" href="{% static 'notes/styles.css' %}?v=role-colors-1">
+    <link rel="stylesheet" href="{% static 'notes/styles.css' %}?v=table-headers-3">
 </head>
 <body>
     <div class="fixed-page-header" data-fixed-page-header>
@@ -32,6 +32,7 @@
     </main>
     {% block scripts %}{% endblock %}
     <script src="{% static 'notes/day_off.js' %}" defer></script>
-    <script src="{% static 'notes/page_header.js' %}" defer></script>
+    <script src="{% static 'notes/page_header.js' %}?v=fixed-header-2" defer></script>
+    <script src="{% static 'notes/scroll_position.js' %}" defer></script>
 </body>
 </html>

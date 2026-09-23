@@ -1,7 +1,7 @@
 {% extends 'notes/base.html' %}
 
 {% block content %}
-    <section class="page-title table-header">
+    <section class="page-title table-header" data-scroll-key="shift:{{ selected_month|date:'Y-m' }}:{% if is_actual_view %}actual{% else %}planned{% endif %}">
         <div>
             <h1>{{ selected_month|date:'Y年n月' }}のシフト（{% if is_actual_view %}実働{% else %}予定{% endif %}）</h1>
             {% if is_actual_view %}<div class="actual-legend">(変更)：予定から変更／未登録：実働の入力なし</div>{% endif %}
