@@ -676,3 +676,239 @@ class ActualTableTests(TestCase):
         response = self.client.post(url, {f'actual_day_off_{staff.pk}': '1'}, follow=True)
         self.assertRedirects(response, reverse('shift_table') + '?month=2025-03&view=actual')
         self.assertContains(response, reverse('shift_table') + '?month=2025-03&view=actual')
+
+
+class HolidayWageTests(TestCase):
+    def test_weekend_and_holidays_use_special_rate(self):
+        staff = Staff.objects.create(name='Test', hourly_wage=1000, holiday_hourly_wage=1200)
+        for day in [18, 19, 20, 21, 22, 23]:
+            Shift.objects.create(staff=staff, work_date=f'2026-09-{day}', start_time='09:00', end_time='10:00')
+        response = self.client.get(reverse('salary_list'), {'month': '2026-09'})
+        self.assertEqual(response.context['rows'][0]['gross_amount'], '7,000\u5186')
+
+    def test_missing_rate_falls_back_and_zero_is_respected(self):
+        staff = Staff.objects.create(name='Test', hourly_wage=1000)
+        Shift.objects.create(staff=staff, work_date='2026-09-19', start_time='09:00', end_time='10:00')
+        url = reverse('salary_list') + '?month=2026-09'
+        self.assertEqual(self.client.get(url).context['rows'][0]['gross_amount'], '1,000\u5186')
+        staff.holiday_hourly_wage = 0
+        staff.save()
+        self.assertEqual(self.client.get(url).context['rows'][0]['gross_amount'], '0\u5186')
+
+    def test_both_settings_forms_save_and_validate_rate(self):
+        staff = Staff.objects.create(name='Test', hourly_wage=1000)
+        for name in ['staff_update', 'staff_salary_settings']:
+            url = reverse(name, args=[staff.pk])
+            response = self.client.post(url, {'name': 'Test', 'hourly_wage': '1000', 'holiday_hourly_wage': '1400'})
+            self.assertEqual(response.status_code, 302)
+            staff.refresh_from_db()
+            self.assertEqual(staff.holiday_hourly_wage, 1400)
+            for invalid in ['-1', 'abc', '12.5']:
+                response = self.client.post(url, {'name': 'Test', 'hourly_wage': '999', 'holiday_hourly_wage': invalid})
+                self.assertEqual(response.status_code, 200)
+                staff.refresh_from_db()
+                self.assertEqual(staff.hourly_wage, 1000)
+                self.assertEqual(staff.holiday_hourly_wage, 1400)
+
+    def test_work_on_planned_day_off_is_paid_at_holiday_rate(self):
+        staff = Staff.objects.create(name='Test', hourly_wage=1000, holiday_hourly_wage=1200)
+        off = ShiftType.objects.create(code='\u4f11')
+        Shift.objects.create(staff=staff, shift_type=off, work_date='2026-09-19', actual_start_time='09:00', actual_end_time='11:00')
+        Shift.objects.create(staff=staff, work_date='2026-09-20', start_time='09:00', end_time='11:00', actual_day_off=True)
+        response = self.client.get(reverse('salary_list'), {'month': '2026-09'})
+        self.assertEqual(response.context['rows'][0]['gross_amount'], '2,400\u5186')
+
+
+class PaidLeaveTests(TestCase):
+    def test_monthly_leave_is_added_without_work_hours_and_is_isolated(self):
+        from .models import MonthlyPaidLeave
+        staff = Staff.objects.create(name='Test', hourly_wage=1200)
+        url = reverse('staff_salary_settings', args=[staff.pk])
+        response = self.client.post(url + '?month=2026-09', {
+            'hourly_wage': '1200', 'paid_leave-days': '1.5', 'paid_leave-hours_per_day': '7.5',
+        })
+        self.assertEqual(response.status_code, 302)
+        leave = MonthlyPaidLeave.objects.get()
+        self.assertEqual(leave.amount, 13500)
+        response = self.client.get(reverse('salary_list'), {'month': '2026-09'})
+        self.assertEqual(response.context['rows'][0]['gross_amount'], '13,500\u5186')
+        self.assertEqual(response.context['rows'][0]['work_duration'], '0\u6642\u9593')
+        response = self.client.get(reverse('salary_list'), {'month': '2026-10'})
+        self.assertEqual(response.context['rows'][0]['gross_amount'], '0\u5186')
+        self.client.post(url + '?month=2026-10', {
+            'hourly_wage': '1200', 'paid_leave-days': '2', 'paid_leave-hours_per_day': '8',
+        })
+        leave.refresh_from_db()
+        self.assertEqual(leave.amount, 13500)
+        self.assertEqual(MonthlyPaidLeave.objects.count(), 2)
+        self.client.post(url + '?month=2026-09', {
+            'hourly_wage': '1200', 'paid_leave-days': '0', 'paid_leave-hours_per_day': '7.5',
+        })
+        self.assertEqual(MonthlyPaidLeave.objects.count(), 2)
+        leave.refresh_from_db()
+        self.assertEqual(leave.amount, 0)
+
+    def test_invalid_leave_does_not_save_wages(self):
+        from .models import MonthlyPaidLeave
+        staff = Staff.objects.create(name='Test', hourly_wage=1200)
+        url = reverse('staff_salary_settings', args=[staff.pk]) + '?month=2026-09'
+        for days, hours in [('-1', '8'), ('32', '8'), ('1', '25'), ('1', '0'), ('abc', '8'), ('1.001', '8')]:
+            with self.subTest(days=days, hours=hours):
+                response = self.client.post(url, {
+                    'hourly_wage': '999', 'paid_leave-days': days, 'paid_leave-hours_per_day': hours,
+                })
+                self.assertEqual(response.status_code, 200)
+                self.assertTrue(response.context['paid_leave_form'].errors)
+                staff.refresh_from_db()
+                self.assertEqual(staff.hourly_wage, 1200)
+                self.assertFalse(MonthlyPaidLeave.objects.exists())
+
+
+class WageHistoryTests(TestCase):
+    def test_effective_month_preserves_past_pay_and_paid_leave(self):
+        from datetime import date
+        from .models import MonthlyPaidLeave, StaffWageHistory
+        staff = Staff.objects.create(name='Test', hourly_wage=1000, holiday_hourly_wage=1200)
+        for month in [9, 10, 11]:
+            Shift.objects.create(staff=staff, work_date=date(2026, month, 15), start_time='09:00', end_time='10:00')
+            MonthlyPaidLeave.objects.create(staff=staff, month=date(2026, month, 1), days=1, hours_per_day=2)
+        url = reverse('staff_salary_settings', args=[staff.pk]) + '?month=2026-09'
+        self.client.post(url, {'hourly_wage': '1500', 'holiday_hourly_wage': '1800', 'wage_effective_month': '2026-10'})
+        staff.refresh_from_db()
+        self.assertEqual(staff.wages_for_month(date(2026, 9, 1)), (1000, 1200))
+        self.assertEqual(staff.wages_for_month(date(2026, 10, 1)), (1500, 1800))
+        for month, expected in [('2026-09', '3,000'), ('2026-10', '4,500'), ('2026-11', '4,800')]:
+            response = self.client.get(reverse('salary_list'), {'month': month})
+            self.assertEqual(response.context['rows'][0]['gross_amount'], expected + '\u5186')
+        self.client.post(url, {'hourly_wage': '1600', 'holiday_hourly_wage': '1900', 'wage_effective_month': '2026-10'})
+        self.assertEqual(StaffWageHistory.objects.filter(staff=staff).count(), 2)
+        self.assertEqual(staff.wages_for_month(date(2026, 10, 1)), (1600, 1900))
+        self.client.post(url, {'hourly_wage': '1100', 'holiday_hourly_wage': '', 'wage_effective_month': '2026-08'})
+        self.assertEqual(staff.wages_for_month(date(2026, 9, 1)), (1100, None))
+        self.assertEqual(staff.wages_for_month(date(2026, 10, 1)), (1600, 1900))
+
+    def test_invalid_month_does_not_save(self):
+        staff = Staff.objects.create(name='Test', hourly_wage=1000)
+        for name in ['staff_salary_settings', 'staff_update']:
+            response = self.client.post(reverse(name, args=[staff.pk]), {
+                'name': 'Test', 'hourly_wage': '2000', 'wage_effective_month': '2026-13',
+            })
+            self.assertEqual(response.status_code, 200)
+            staff.refresh_from_db()
+            self.assertEqual(staff.hourly_wage, 1000)
+            self.assertFalse(staff.wage_history.exists())
+
+    def test_staff_edit_also_preserves_previous_wage(self):
+        from datetime import date
+        staff = Staff.objects.create(name='Test', hourly_wage=1000)
+        self.client.post(reverse('staff_update', args=[staff.pk]), {
+            'name': 'Test', 'hourly_wage': '1300', 'wage_effective_month': '2026-10',
+        })
+        staff.refresh_from_db()
+        self.assertEqual(staff.wages_for_month(date(2026, 9, 1)), (1000, None))
+        self.assertEqual(staff.wages_for_month(date(2026, 10, 1)), (1300, None))
+
+
+class WagePeriodTests(TestCase):
+    def test_multiple_periods_save_and_reload(self):
+        from datetime import date
+        staff = Staff.objects.create(name='Test', hourly_wage=1000)
+        url = reverse('staff_salary_settings', args=[staff.pk]) + '?month=2026-09'
+        data = {
+            'wages-TOTAL_FORMS': '2', 'wages-INITIAL_FORMS': '1',
+            'wages-0-effective_month': '2026-09', 'wages-0-hourly_wage': '1100', 'wages-0-holiday_hourly_wage': '',
+            'wages-1-effective_month': '2026-10', 'wages-1-hourly_wage': '1200', 'wages-1-holiday_hourly_wage': '1500',
+        }
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(staff.wages_for_month(date(2026, 8, 1)), (1000, None))
+        self.assertEqual(staff.wages_for_month(date(2026, 9, 1)), (1100, None))
+        self.assertEqual(staff.wages_for_month(date(2026, 10, 1)), (1200, 1500))
+        response = self.client.get(url)
+        self.assertEqual(len(response.context['wage_periods'].forms), 2)
+        self.assertContains(response, 'data-add-wage-period')
+        data['wages-INITIAL_FORMS'] = '2'
+        data.pop('wages-0-effective_month')
+        data.pop('wages-1-effective_month')
+        data['wages-0-hourly_wage'] = '1150'
+        self.assertEqual(self.client.post(url, data).status_code, 302)
+        self.assertEqual(staff.wages_for_month(date(2026, 9, 1)), (1150, None))
+
+    def test_duplicate_months_and_invalid_wages_do_not_save(self):
+        staff = Staff.objects.create(name='Test', hourly_wage=1000)
+        url = reverse('staff_salary_settings', args=[staff.pk]) + '?month=2026-09'
+        data = {
+            'wages-TOTAL_FORMS': '2', 'wages-INITIAL_FORMS': '1',
+            'wages-0-effective_month': '2026-09', 'wages-0-hourly_wage': '1100',
+            'wages-1-effective_month': '2026-09', 'wages-1-hourly_wage': '1200',
+        }
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context['wage_periods'].non_form_errors())
+        self.assertFalse(staff.wage_history.exists())
+        data['wages-1-effective_month'] = '2026-10'
+        data['wages-1-hourly_wage'] = '-1'
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context['wage_periods'].errors[1])
+        self.assertFalse(staff.wage_history.exists())
+
+
+class StaffWagePeriodTests(TestCase):
+    def test_staff_edit_saves_periods_shared_with_salary_settings(self):
+        from datetime import date
+        staff = Staff.objects.create(name='Test', hourly_wage=1000)
+        url = reverse('staff_update', args=[staff.pk])
+        response = self.client.get(url)
+        self.assertContains(response, 'data-add-wage-period')
+        data = {
+            'name': 'Updated', 'wages-TOTAL_FORMS': '2', 'wages-INITIAL_FORMS': '1',
+            'wages-0-effective_month': '2026-09', 'wages-0-hourly_wage': '1100',
+            'wages-1-effective_month': '2026-10', 'wages-1-hourly_wage': '1200',
+            'wages-1-holiday_hourly_wage': '1500',
+        }
+        self.assertRedirects(self.client.post(url, data), reverse('staff_list'))
+        staff.refresh_from_db()
+        self.assertEqual(staff.name, 'Updated')
+        self.assertEqual(staff.wages_for_month(date(2026, 8, 1)), (1000, None))
+        self.assertEqual(staff.wages_for_month(date(2026, 9, 1)), (1100, None))
+        self.assertEqual(staff.wages_for_month(date(2026, 10, 1)), (1200, 1500))
+        response = self.client.get(reverse('staff_salary_settings', args=[staff.pk]))
+        self.assertEqual(len(response.context['wage_periods'].forms), 2)
+        data['wages-INITIAL_FORMS'] = '2'
+        data['wages-1-hourly_wage'] = '-1'
+        data['name'] = 'Invalid'
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context['wage_periods'].errors[1])
+        staff.refresh_from_db()
+        self.assertEqual(staff.name, 'Updated')
+        self.assertEqual(staff.wages_for_month(date(2026, 10, 1)), (1200, 1500))
+
+
+class StaffPaidLeaveHoursTests(TestCase):
+    def test_staff_hours_default_for_new_month_and_preserve_saved_month(self):
+        from datetime import date
+        from decimal import Decimal
+        from .models import MonthlyPaidLeave
+        staff = Staff.objects.create(name='Test', hourly_wage=1200)
+        url = reverse('staff_update', args=[staff.pk])
+        self.assertEqual(self.client.post(url, {'name': 'Test', 'hourly_wage': '1200', 'paid_leave_hours_per_day': '7.5'}).status_code, 302)
+        staff.refresh_from_db()
+        self.assertEqual(staff.paid_leave_hours_per_day, Decimal('7.5'))
+        MonthlyPaidLeave.objects.create(staff=staff, month=date(2026, 9, 1), days=1, hours_per_day=6)
+        settings = reverse('staff_salary_settings', args=[staff.pk])
+        for month, hours in [('2026-09', 6), ('2026-10', Decimal('7.5'))]:
+            response = self.client.get(settings, {'month': month})
+            self.assertEqual(response.context['paid_leave_form'].initial['hours_per_day'], hours)
+
+    def test_invalid_staff_hours_rejected(self):
+        staff = Staff.objects.create(name='Test', paid_leave_hours_per_day=8)
+        for value in ['-1', '25', 'abc', '7.555', 'NaN']:
+            response = self.client.post(reverse('staff_update', args=[staff.pk]), {
+                'name': 'Changed', 'paid_leave_hours_per_day': value,
+            })
+            self.assertEqual(response.status_code, 200)
+            staff.refresh_from_db()
+            self.assertEqual(staff.name, 'Test')
+            self.assertEqual(staff.paid_leave_hours_per_day, 8)

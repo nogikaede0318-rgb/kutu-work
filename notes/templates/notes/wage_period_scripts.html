@@ -1,0 +1,14 @@
+
+<script>
+    document.querySelector('[data-add-wage-period]').addEventListener('click', () => {
+        const total = document.querySelector('#id_wages-TOTAL_FORMS');
+        if (Number(total.value) >= 100) return;
+        const template = document.querySelector('#wage-period-template');
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = template.innerHTML.replaceAll('__prefix__', total.value);
+        const row = wrapper.firstElementChild;
+        document.querySelector('[data-wage-periods]').append(row);
+        total.value = Number(total.value) + 1;
+        row.querySelector('input').focus();
+    });
+</script>

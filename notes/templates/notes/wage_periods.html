@@ -1,0 +1,16 @@
+            <fieldset class="settings-card">
+                <legend>時給</legend>
+                <p class="settings-help">適用開始月から次の期間まで適用します。土日祝日が空欄なら平日時給を使います。</p>
+                {{ wage_periods.management_form }}
+                {{ wage_periods.non_form_errors }}
+                <div data-wage-periods>
+                    {% for period in wage_periods %}
+                        {% include 'notes/wage_period.html' %}
+                    {% endfor %}
+                </div>
+                <button type="button" class="outline-button" data-add-wage-period>＋期間を追加</button>
+                <template id="wage-period-template">
+                    {% include 'notes/wage_period.html' with period=wage_periods.empty_form %}
+                </template>
+            </fieldset>
+

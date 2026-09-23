@@ -5,7 +5,7 @@ from .models import SalaryDeduction, Shift, ShiftType, Staff, StaffSalaryDeducti
 
 @admin.register(Staff)
 class StaffAdmin(admin.ModelAdmin):
-    list_display = ('management_number', 'name', 'hourly_wage', 'created_at')
+    list_display = ('management_number', 'name', 'hourly_wage', 'holiday_hourly_wage', 'created_at')
     search_fields = ('management_number', 'name')
 
 

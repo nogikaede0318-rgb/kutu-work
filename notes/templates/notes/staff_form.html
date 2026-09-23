@@ -1,10 +1,13 @@
 {% extends 'notes/base.html' %}
 
 {% block content %}
-    <section class="form-panel">
+    <section class="form-panel settings-editor">
         <h1>{% if staff %}スタッフ編集{% else %}スタッフ追加{% endif %}</h1>
         <form method="post">
             {% csrf_token %}
+            <fieldset class="settings-card">
+                <legend>基本情報</legend>
+                <div class="staff-identity-grid"><div>
             <label for="management_number">管理番号</label>
             <input
                 id="management_number"
@@ -17,9 +20,22 @@
                 placeholder="01"
                 autofocus
             >
+                </div><div>
             <label for="name">スタッフ名</label>
             <input id="name" name="name" type="text" maxlength="80" value="{{ staff.name|default:'' }}" required>
-            <label for="hourly_wage">時給</label>
+                </div></div>
+            </fieldset>
+            {% if wage_periods %}
+                {% include 'notes/wage_periods.html' %}
+            {% else %}
+            <fieldset class="settings-card">
+                <legend>時給</legend>
+                <div class="wage-rate-pair"><div>
+            <label for="hourly_wage">平日時給</label>
+            {% if staff %}
+                <label for="wage_effective_month">時給の適用開始月</label>
+                <input id="wage_effective_month" name="wage_effective_month" type="month" value="{% now 'Y-m' %}" required>
+            {% endif %}
             <input
                 id="hourly_wage"
                 name="hourly_wage"
@@ -28,6 +44,18 @@
                 step="1"
                 value="{{ staff.hourly_wage|default:0 }}"
             >
+                </div><div>
+            <label for="holiday_hourly_wage">土日祝日時給（空欄なら平日時給）</label>
+            <input id="holiday_hourly_wage" name="holiday_hourly_wage" type="number" min="0" step="1" value="{{ staff.holiday_hourly_wage|default_if_none:'' }}">
+                </div></div>
+            </fieldset>
+            {% endif %}
+            <fieldset class="settings-card">
+                <legend>有給</legend>
+                <label for="paid_leave_hours_per_day">1日あたりの時間</label>
+                <input id="paid_leave_hours_per_day" name="paid_leave_hours_per_day" type="number" min="0" max="24" step="0.01" value="{% if request.method == 'POST' %}{{ request.POST.paid_leave_hours_per_day|default:'0' }}{% else %}{{ staff.paid_leave_hours_per_day|default:'0' }}{% endif %}">
+                <p>月別の有給設定の初期値に使います。例：7.5時間。登録済みの月の時間は変更しません。</p>
+            </fieldset>
             <div class="form-actions">
                 <a href="{% url 'staff_list' %}">キャンセル</a>
                 <button type="submit">{% if staff %}保存{% else %}追加{% endif %}</button>
@@ -35,3 +63,5 @@
         </form>
     </section>
 {% endblock %}
+
+{% block scripts %}{% if wage_periods %}{% include 'notes/wage_period_scripts.html' %}{% endif %}{% endblock %}

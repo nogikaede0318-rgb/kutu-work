@@ -5,6 +5,9 @@ from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.db import transaction
+from django.core.exceptions import ValidationError
+from .forms import MonthlyPaidLeaveForm, WagePeriodFormSet
 
 from .models import (
     BREAK_MINUTE_CHOICES,
@@ -18,6 +21,8 @@ from .models import (
     ShiftType,
     Staff,
     StaffSalaryDeduction,
+    MonthlyPaidLeave,
+    StaffWageHistory,
 )
 
 
@@ -176,15 +181,32 @@ def staff_list(request):
     )
 
 
+@transaction.atomic
 def staff_update(request, pk):
     staff = get_object_or_404(Staff, pk=pk)
+    wage_periods = _wage_period_formset(request, staff, date.today().replace(day=1))
     if request.method == 'POST':
+        previous_wages = (staff.hourly_wage, staff.holiday_hourly_wage)
+        effective_month = _wage_effective_month(request, date.today().replace(day=1))
+        has_periods = 'wages-TOTAL_FORMS' in request.POST
+        periods_valid = wage_periods.is_valid() if has_periods else True
+        if effective_month is None or not periods_valid:
+            return render(request, 'notes/staff_form.html', {'staff': staff, 'wage_periods': wage_periods})
         updated_staff = _build_staff_from_request(request, staff=staff)
         if updated_staff:
+            if has_periods:
+                changes = [form.cleaned_data for form in wage_periods if form.cleaned_data]
+                for change in sorted(changes, key=lambda item: item['effective_month']):
+                    _record_wage_change(staff, change['effective_month'], change['hourly_wage'], change['holiday_hourly_wage'], previous_wages)
+                latest = max(changes, key=lambda item: item['effective_month'])
+                updated_staff.hourly_wage = latest['hourly_wage']
+                updated_staff.holiday_hourly_wage = latest['holiday_hourly_wage']
+            elif previous_wages != (updated_staff.hourly_wage, updated_staff.holiday_hourly_wage):
+                _record_wage_change(staff, effective_month, updated_staff.hourly_wage, updated_staff.holiday_hourly_wage, previous_wages)
             updated_staff.save()
             messages.success(request, 'スタッフを更新しました。')
             return redirect('staff_list')
-    return render(request, 'notes/staff_form.html', {'staff': staff})
+    return render(request, 'notes/staff_form.html', {'staff': staff, 'wage_periods': wage_periods})
 
 
 def salary_list(request):
@@ -205,19 +227,39 @@ def salary_list(request):
     total_gross_amount = 0
     total_adjustment_amount = 0
     total_net_amount = 0
+    holidays = _japanese_holidays(selected_month.year)
+    paid_leave_by_staff = {
+        leave.staff_id: leave for leave in MonthlyPaidLeave.objects.filter(month=first_day).select_related('staff')
+    }
     for staff in Staff.objects.all():
         staff_minutes = 0
+        weekday_minutes = 0
+        holiday_minutes = 0
         for shift in shifts:
             if shift.staff_id != staff.id:
                 continue
-            staff_minutes += _salary_shift_minutes(shift)
-        gross_amount = _salary_amount(staff_minutes, staff.hourly_wage)
+            minutes = _salary_shift_minutes(shift)
+            if shift.work_date.weekday() >= 5 or shift.work_date in holidays:
+                holiday_minutes += minutes
+            else:
+                weekday_minutes += minutes
+        staff_minutes = weekday_minutes + holiday_minutes
+        weekday_wage, holiday_wage = staff.wages_for_month(selected_month)
+        holiday_wage = holiday_wage if holiday_wage is not None else weekday_wage
+        gross_amount = (weekday_minutes * weekday_wage + holiday_minutes * holiday_wage) // 60
+        paid_leave = paid_leave_by_staff.get(staff.pk)
+        paid_leave_amount = paid_leave.amount if paid_leave else 0
+        gross_amount += paid_leave_amount
         adjustment_amount = _staff_salary_adjustment_total(staff, deductions, staff_deduction_settings)
         net_amount = gross_amount + adjustment_amount
         rows.append(
             {
                 'staff': staff,
                 'work_duration': _format_minutes(staff_minutes),
+                'weekday_duration': _format_minutes(weekday_minutes),
+                'holiday_duration': _format_minutes(holiday_minutes),
+                'paid_leave_days': paid_leave.days if paid_leave else 0,
+                'paid_leave_amount': _format_yen(paid_leave_amount),
                 'gross_amount': _format_yen(gross_amount),
                 'adjustment_amount': _format_yen(adjustment_amount, signed=True),
                 'net_amount': _format_yen(net_amount),
@@ -288,9 +330,21 @@ def salary_settings(request):
     )
 
 
+@transaction.atomic
 def staff_salary_settings(request, pk):
     return_month = _return_month(request)
     staff = get_object_or_404(Staff, pk=pk)
+    weekday_wage, selected_holiday_wage = staff.wages_for_month(return_month)
+    paid_leave = MonthlyPaidLeave.objects.filter(staff=staff, month=return_month).first()
+    paid_leave = paid_leave or MonthlyPaidLeave(
+        staff=staff, month=return_month, hours_per_day=staff.paid_leave_hours_per_day,
+    )
+    has_paid_leave_data = request.method == 'POST' and any(key.startswith('paid_leave-') for key in request.POST)
+    paid_leave_form = MonthlyPaidLeaveForm(
+        request.POST if has_paid_leave_data else None, instance=paid_leave, prefix='paid_leave',
+    )
+    has_periods = request.method == 'POST' and 'wages-TOTAL_FORMS' in request.POST
+    wage_periods = _wage_period_formset(request, staff, return_month)
     deductions = SalaryDeduction.objects.all()
     staff_settings = {
         staff_amount.deduction_id: staff_amount
@@ -298,20 +352,40 @@ def staff_salary_settings(request, pk):
     }
 
     if request.method == 'POST':
-        hourly_wage = request.POST.get('hourly_wage', '').strip()
-        try:
-            parsed_hourly_wage = int(hourly_wage or 0)
-        except ValueError:
-            messages.error(request, '時給は0以上の整数で入力してください。')
-            parsed_hourly_wage = None
+        if has_periods:
+            wages_valid = wage_periods.is_valid()
+            changes = [form.cleaned_data for form in wage_periods if form.cleaned_data] if wages_valid else []
+        else:
+            effective_month = _wage_effective_month(request, return_month)
+            holiday_valid, holiday_wage = _parse_holiday_wage(request, staff)
+            hourly_wage = request.POST.get('hourly_wage', '').strip()
+            try:
+                parsed_hourly_wage = int(hourly_wage or 0)
+            except ValueError:
+                messages.error(request, '時給は0以上の整数で入力してください。')
+                parsed_hourly_wage = None
 
-        if parsed_hourly_wage is not None and parsed_hourly_wage < 0:
-            messages.error(request, '時給は0以上の整数で入力してください。')
-            parsed_hourly_wage = None
+            if parsed_hourly_wage is not None and parsed_hourly_wage < 0:
+                messages.error(request, '時給は0以上の整数で入力してください。')
+                parsed_hourly_wage = None
 
-        if parsed_hourly_wage is not None:
-            staff.hourly_wage = parsed_hourly_wage
-            staff.save(update_fields=['hourly_wage'])
+            wages_valid = parsed_hourly_wage is not None and holiday_valid and effective_month is not None
+            changes = [{'effective_month': effective_month, 'hourly_wage': parsed_hourly_wage,
+                        'holiday_hourly_wage': holiday_wage}] if wages_valid else []
+        paid_leave_valid = paid_leave_form.is_valid() if has_paid_leave_data else True
+        if wages_valid and paid_leave_valid:
+            previous_wages = (staff.hourly_wage, staff.holiday_hourly_wage)
+            for change in sorted(changes, key=lambda item: item['effective_month']):
+                month = change['effective_month']
+                weekday, holiday = change['hourly_wage'], change['holiday_hourly_wage']
+                if has_periods or staff.wages_for_month(month) != (weekday, holiday):
+                    _record_wage_change(staff, month, weekday, holiday, previous_wages)
+            latest = max(changes, key=lambda item: item['effective_month'])
+            staff.hourly_wage = latest['hourly_wage']
+            staff.holiday_hourly_wage = latest['holiday_hourly_wage']
+            staff.save(update_fields=['hourly_wage', 'holiday_hourly_wage'])
+            if has_paid_leave_data:
+                paid_leave_form.save()
             for deduction in deductions:
                 staff_amount, _created = StaffSalaryDeduction.objects.get_or_create(
                     staff=staff,
@@ -343,6 +417,11 @@ def staff_salary_settings(request, pk):
         request,
         'notes/staff_salary_settings.html',
         {
+            'paid_leave_form': paid_leave_form,
+            'wage_periods': wage_periods,
+            'weekday_wage': weekday_wage,
+            'selected_holiday_wage': selected_holiday_wage,
+            'wage_history': staff.wage_history.all(),
             'return_month': return_month,
             'staff': staff,
             'rows': rows,
@@ -538,6 +617,18 @@ def _staff_stats_years(selected_year):
 
 
 def _build_staff_from_request(request, staff=None):
+    paid_leave_hours = staff.paid_leave_hours_per_day if staff else 0
+    if 'paid_leave_hours_per_day' in request.POST:
+        try:
+            paid_leave_hours = Staff._meta.get_field('paid_leave_hours_per_day').clean(
+                request.POST.get('paid_leave_hours_per_day', '').strip() or '0', staff,
+            )
+        except ValidationError:
+            messages.error(request, '有給1日あたりの時間は0〜24の数値（小数点以下2桁まで）で入力してください。')
+            return None
+    holiday_valid, holiday_wage = _parse_holiday_wage(request, staff)
+    if not holiday_valid:
+        return None
     management_number = request.POST.get('management_number', '').strip()
     name = request.POST.get('name', '').strip()
     hourly_wage = request.POST.get('hourly_wage', '').strip()
@@ -580,11 +671,72 @@ def _build_staff_from_request(request, staff=None):
         staff = Staff()
     staff.management_number = management_number or None
     staff.name = name
+    staff.paid_leave_hours_per_day = paid_leave_hours
     staff.hourly_wage = parsed_hourly_wage
+    staff.holiday_hourly_wage = holiday_wage
     return staff
 
 
+def _wage_period_formset(request, staff, return_month):
+    weekday_wage, selected_holiday_wage = staff.wages_for_month(return_month)
+    period_initial = [
+        {'effective_month': wage.effective_month, 'hourly_wage': wage.hourly_wage,
+         'holiday_hourly_wage': wage.holiday_hourly_wage, 'saved': True}
+        for wage in staff.wage_history.exclude(effective_month=date.min).order_by('effective_month')
+    ]
+    if not period_initial:
+        period_initial = [{'effective_month': return_month, 'hourly_wage': weekday_wage,
+                           'holiday_hourly_wage': selected_holiday_wage}]
+    has_periods = request.method == 'POST' and 'wages-TOTAL_FORMS' in request.POST
+    wage_periods = WagePeriodFormSet(request.POST if has_periods else None,
+                                   initial=period_initial, prefix='wages')
+    return wage_periods
+
+
+def _wage_effective_month(request, fallback):
+    value = request.POST.get('wage_effective_month', '').strip()
+    if not value:
+        return fallback
+    try:
+        return datetime.strptime(value, '%Y-%m').date().replace(day=1)
+    except ValueError:
+        messages.error(request, '時給の適用開始月を正しく入力してください。')
+        return None
+
+
+def _record_wage_change(staff, month, weekday, holiday, previous_wages):
+    # Preserve the original rate for every month before the first dated change.
+    StaffWageHistory.objects.get_or_create(
+        staff=staff, effective_month=date.min,
+        defaults={'hourly_wage': previous_wages[0], 'holiday_hourly_wage': previous_wages[1]},
+    )
+    StaffWageHistory.objects.update_or_create(
+        staff=staff, effective_month=month,
+        defaults={'hourly_wage': weekday, 'holiday_hourly_wage': holiday},
+    )
+
+
+def _parse_holiday_wage(request, staff=None):
+    if 'holiday_hourly_wage' not in request.POST:
+        return True, staff.holiday_hourly_wage if staff else None
+    value = request.POST.get('holiday_hourly_wage', '').strip()
+    if not value:
+        return True, None
+    try:
+        wage = int(value)
+        if wage < 0:
+            raise ValueError
+    except ValueError:
+        messages.error(request, '土日祝日時給は0以上の整数で入力してください。')
+        return False, None
+    return True, wage
+
+
 def _salary_shift_minutes(shift):
+    if shift.actual_day_off:
+        return 0
+    if shift.actual_start_time and shift.actual_end_time:
+        return _actual_shift_work_minutes(shift, 0)
     if shift.shift_type and shift.shift_type.code == '休':
         return 0
     if shift.start_time and shift.end_time:

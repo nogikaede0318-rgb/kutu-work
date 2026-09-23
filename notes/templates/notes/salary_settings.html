@@ -10,7 +10,7 @@
         </div>
     </section>
 
-    <section class="settings-panel">
+    <section class="settings-panel deduction-editor">
         <h2>差引項目を追加</h2>
         <form method="post" class="settings-form">
             {% csrf_token %}
@@ -54,7 +54,7 @@
 
     <div class="settings-list">
         {% for row in deduction_rows %}
-            <section class="settings-panel">
+            <section class="settings-panel deduction-editor">
                 <form method="post">
                     {% csrf_token %}
             <input type="hidden" name="month" value="{{ return_month|date:'Y-m' }}">

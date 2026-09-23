@@ -52,8 +52,8 @@
                 {% for row in rows %}
                     <tr>
                         <th class="salary-col-staff">{{ row.staff.name }}</th>
-                        <td class="salary-col-time">{{ row.work_duration }}</td>
-                        <td class="salary-col-money">{{ row.gross_amount }}</td>
+                        <td class="salary-col-time">{{ row.work_duration }}<br><small>平日：{{ row.weekday_duration }}<br>土日祝：{{ row.holiday_duration }}</small></td>
+                        <td class="salary-col-money">{{ row.gross_amount }}<br><small>有給 {{ row.paid_leave_days }}日：{{ row.paid_leave_amount }}</small></td>
                         <td class="salary-col-money">{{ row.adjustment_amount }}</td>
                         <td class="salary-col-money">{{ row.net_amount }}</td>
                         <td class="salary-col-action"><a class="outline-button" href="{% url 'staff_salary_settings' row.staff.pk %}?month={{ selected_month|date:'Y-m' }}">設定</a></td>

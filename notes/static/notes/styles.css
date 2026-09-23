@@ -500,12 +500,13 @@ button:hover {
 
 .staff-list {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 16px;
 }
 
 .staff-card {
     display: flex;
+    min-width: 0;
     min-height: 148px;
     flex-direction: column;
     justify-content: space-between;
@@ -536,8 +537,28 @@ button:hover {
 
 .staff-card-actions {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
+}
+
+.staff-card-actions > a,
+.staff-card-actions > button {
+    min-width: 0;
+    min-height: 42px;
+    padding: 6px 8px;
+    white-space: nowrap;
+}
+
+@media (max-width: 1000px) {
+    .staff-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 640px) {
+    .staff-list {
+        grid-template-columns: minmax(0, 1fr);
+    }
 }
 
 .link-button,
@@ -1307,6 +1328,166 @@ html {
 
 .print-calendar {
     display: none;
+}
+
+.wage-period {
+    padding: 12px;
+    margin-bottom: 12px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+}
+
+.wage-rate-pair {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.wage-rate-pair input {
+    min-width: 0;
+}
+
+.settings-editor.form-panel,
+.settings-editor.settings-panel {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+}
+
+.settings-editor .settings-card {
+    min-width: 0;
+    margin: 0 0 28px;
+    padding: 22px 24px 24px;
+    border: 1px solid #d6c1c7;
+    border-top: 3px solid var(--accent);
+    border-radius: 10px;
+    background: var(--surface);
+    box-shadow: 0 3px 12px rgba(42, 23, 27, 0.04);
+}
+
+.settings-card > legend {
+    padding: 0 10px;
+    margin-left: -10px;
+    font-size: 1.1rem;
+    color: var(--accent-dark);
+}
+
+.settings-card > p,
+.settings-card .settings-help {
+    margin: 0 0 18px;
+    font-size: 0.82rem;
+    line-height: 1.7;
+    color: var(--muted);
+}
+
+.settings-card > input + p {
+    margin: 10px 0 0;
+}
+
+.settings-card label {
+    margin: 0 0 7px;
+    font-size: 0.88rem;
+}
+
+.settings-card input {
+    background: #fff;
+}
+
+.settings-card input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.settings-card .wage-period {
+    display: grid;
+    grid-template-columns: minmax(150px, 0.8fr) minmax(0, 2fr);
+    gap: 20px;
+    align-items: start;
+    padding: 18px;
+    background: #faf7f8;
+    border-color: #dfcfd4;
+    border-radius: 8px;
+}
+
+.settings-card input:disabled {
+    color: var(--ink);
+    background: #f0e9ec;
+    opacity: 1;
+}
+
+.settings-card [data-add-wage-period] {
+    width: 100%;
+    border: 1px dashed var(--accent);
+    background: #fff8fa;
+    color: var(--accent-dark);
+}
+
+.staff-identity-grid {
+    display: grid;
+    grid-template-columns: 140px minmax(0, 1fr);
+    gap: 24px;
+}
+
+.settings-card .salary-item-list {
+    margin-top: 0;
+}
+
+.settings-card .salary-item-row {
+    grid-template-columns: minmax(0, 1fr) 100px 150px;
+    border-color: #dfcfd4;
+    padding: 16px;
+}
+
+.settings-card .salary-item-row input[type="number"] {
+    text-align: right;
+}
+
+.settings-editor .errorlist {
+    color: var(--danger);
+    font-size: 0.8rem;
+    padding-left: 20px;
+}
+
+.deduction-editor {
+    max-width: 960px;
+    margin: 0 auto;
+    border-color: #d6c1c7;
+    border-top: 3px solid var(--accent);
+    padding: 24px;
+}
+
+.deduction-editor h2 {
+    color: var(--accent-dark);
+    font-size: 1.15rem;
+}
+
+@media screen and (max-width: 640px) {
+    .settings-editor .settings-card {
+        padding: 16px;
+        margin-bottom: 22px;
+    }
+
+    .settings-card .wage-period {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 14px;
+        padding: 12px;
+    }
+
+    .staff-identity-grid {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 16px;
+    }
+
+    .settings-card .salary-item-row {
+        grid-template-columns: minmax(0, 1fr) 90px;
+    }
+
+    .settings-card .salary-item-row input[type="number"] {
+        grid-column: 1 / -1;
+    }
 }
 
 .view-toggle {

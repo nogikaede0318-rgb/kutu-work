@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from django.db import models
+from django.core.validators import MinValueValidator, MaxValueValidator
 
 
 SHIFT_TYPE_CODES = [('休', '休')] + [(chr(code), chr(code)) for code in range(ord('A'), ord('Z') + 1)]
@@ -51,7 +52,12 @@ SALARY_AMOUNT_DIRECTIONS = [
 class Staff(models.Model):
     management_number = models.CharField('管理番号', max_length=2, unique=True, blank=True, null=True)
     name = models.CharField('名前', max_length=80, unique=True)
-    hourly_wage = models.PositiveIntegerField('時給', default=0)
+    hourly_wage = models.PositiveIntegerField('平日時給', default=0)
+    holiday_hourly_wage = models.PositiveIntegerField('土日祝日時給', blank=True, null=True)
+    paid_leave_hours_per_day = models.DecimalField(
+        '有給1日あたりの時間', max_digits=4, decimal_places=2, default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(24)],
+    )
     created_at = models.DateTimeField('作成日時', auto_now_add=True)
 
     class Meta:
@@ -61,6 +67,40 @@ class Staff(models.Model):
 
     def __str__(self):
         return self.name
+
+    def wages_for_month(self, month):
+        wage = self.wage_history.filter(effective_month__lte=month.replace(day=1)).order_by('-effective_month').first()
+        weekday = wage.hourly_wage if wage else self.hourly_wage
+        holiday = wage.holiday_hourly_wage if wage else self.holiday_hourly_wage
+        return weekday, holiday
+
+
+class StaffWageHistory(models.Model):
+    staff = models.ForeignKey(Staff, on_delete=models.CASCADE, related_name='wage_history')
+    effective_month = models.DateField('適用開始月')
+    hourly_wage = models.PositiveIntegerField('平日時給')
+    holiday_hourly_wage = models.PositiveIntegerField('土日祝日時給', blank=True, null=True)
+
+    class Meta:
+        ordering = ['-effective_month']
+        constraints = [models.UniqueConstraint(fields=['staff', 'effective_month'], name='unique_staff_wage_month')]
+
+
+class MonthlyPaidLeave(models.Model):
+    staff = models.ForeignKey(Staff, on_delete=models.CASCADE, related_name='monthly_paid_leave')
+    month = models.DateField('対象月')
+    days = models.DecimalField('有給日数', max_digits=4, decimal_places=2, default=0,
+                               validators=[MinValueValidator(0), MaxValueValidator(31)])
+    hours_per_day = models.DecimalField('1日あたりの時間', max_digits=4, decimal_places=2, default=0,
+                                        validators=[MinValueValidator(0), MaxValueValidator(24)])
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['staff', 'month'], name='unique_staff_paid_leave_month')]
+
+    @property
+    def amount(self):
+        weekday_wage, _ = self.staff.wages_for_month(self.month)
+        return int(weekday_wage * self.hours_per_day * self.days)
 
 
 class SalaryDeduction(models.Model):

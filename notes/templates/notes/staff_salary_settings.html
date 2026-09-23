@@ -10,13 +10,25 @@
         </div>
     </section>
 
-    <section class="settings-panel">
+    <section class="settings-panel settings-editor">
         <form method="post">
             {% csrf_token %}
             <input type="hidden" name="month" value="{{ return_month|date:'Y-m' }}">
-            <label for="hourly-wage">時給</label>
-            <input id="hourly-wage" name="hourly_wage" type="number" min="0" step="1" value="{{ staff.hourly_wage }}">
+            {% include 'notes/wage_periods.html' %}
 
+            <fieldset class="settings-card">
+                <legend>{{ return_month|date:'Y年n月' }}の有給</legend>
+                <p>平日時給 × 1日あたりの時間 × 有給日数を総支給額に加算します。実働時間には含めません。</p>
+                {{ paid_leave_form.non_field_errors }}
+                <div class="wage-rate-pair">
+                    {% for field in paid_leave_form %}
+                        <div>{{ field.label_tag }}{{ field }}{{ field.errors }}</div>
+                    {% endfor %}
+                </div>
+            </fieldset>
+
+            <fieldset class="settings-card">
+                <legend>加減項目</legend>
             <div class="salary-item-list">
                 {% for row in rows %}
                     <div class="salary-item-row">
@@ -51,6 +63,7 @@
                 {% endfor %}
             </div>
 
+            </fieldset>
             <div class="form-actions">
                 <a href="{% url 'salary_list' %}?month={{ return_month|date:'Y-m' }}">キャンセル</a>
                 <button type="submit">保存</button>
@@ -58,3 +71,5 @@
         </form>
     </section>
 {% endblock %}
+
+{% block scripts %}{% include 'notes/wage_period_scripts.html' %}{% endblock %}

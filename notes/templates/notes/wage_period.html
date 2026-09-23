@@ -1,0 +1,19 @@
+<div class="wage-period">
+    <div>
+        {{ period.effective_month.label_tag }}
+        {{ period.effective_month }}
+        {{ period.effective_month.errors }}
+    </div>
+    <div class="wage-rate-pair">
+        <div>
+            {{ period.hourly_wage.label_tag }}
+            {{ period.hourly_wage }}
+            {{ period.hourly_wage.errors }}
+        </div>
+        <div>
+            {{ period.holiday_hourly_wage.label_tag }}
+            {{ period.holiday_hourly_wage }}
+            {{ period.holiday_hourly_wage.errors }}
+        </div>
+    </div>
+</div>
