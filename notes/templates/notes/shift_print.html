@@ -21,7 +21,7 @@
                         {% for shift in row.cells %}
                             <td {% if is_actual_view %}class="{% if shift.actual_differs_from_plan %}actual-changed{% endif %}"{% elif shift.shift_type.code == '休' %}class="print-day-off"{% elif shift.shift_type.color %}style="background-color: {{ shift.shift_type.color }};"{% endif %}>
                                 {% if is_actual_view %}
-                                    <div class="print-shift-time">{{ shift.actual_display_label|default:'未登録' }}</div>{% if shift.actual_differs_from_plan %}<div>(変更)</div>{% endif %}
+                                    <div class="print-shift-time">{{ shift.actual_display_label|default:'未登録' }}</div>
                                 {% elif shift %}
                                     {% if shift.shift_type.code == '休' %}
                                         休
