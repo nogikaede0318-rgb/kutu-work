@@ -539,6 +539,7 @@ def actual_work_edit(request, work_date):
                 'actual_start': initial_start,
                 'actual_day_off': actual_day_off,
                 'actual_end': initial_end,
+                'actual_break': request.POST.get(f'actual_break_{staff.pk}', '') if request.method == 'POST' else (shift.effective_break_minutes if shift else 0),
             }
         )
 
@@ -748,16 +749,27 @@ def _parse_holiday_wage(request, staff=None):
 def _salary_shift_minutes(shift):
     if shift.actual_day_off:
         return 0
-    if shift.actual_start_time and shift.actual_end_time:
+    if not shift.actual_start_time or not shift.actual_end_time:
+        if shift.shift_type and shift.shift_type.code == '休':
+            return 0
+        return _shift_work_minutes(shift) if shift.start_time and shift.end_time else 0
+
+    category = shift.shift_type
+    scheduled_start = category.start_time if category and category.start_time else shift.start_time
+    scheduled_end = category.end_time if category and category.end_time else shift.end_time
+    if not scheduled_start or not scheduled_end:
         return _actual_shift_work_minutes(shift, 0)
-    if shift.shift_type and shift.shift_type.code == '休':
-        return 0
-    if shift.start_time and shift.end_time:
-        planned_minutes = _shift_work_minutes(shift)
-        return _actual_shift_work_minutes(shift, planned_minutes)
-    if shift.actual_start_time and shift.actual_end_time:
-        return _actual_shift_work_minutes(shift, 0)
-    return 0
+
+    start = datetime.combine(shift.work_date, shift.actual_start_time)
+    end = datetime.combine(shift.work_date, shift.actual_end_time)
+    planned_start = datetime.combine(shift.work_date, scheduled_start)
+    planned_end = datetime.combine(shift.work_date, scheduled_end)
+    regular_seconds = max(0, (min(end, planned_end) - max(start, planned_start)).total_seconds())
+    overtime_start = max(start, planned_end + timedelta(minutes=15))
+    overtime_seconds = max(0, (end - overtime_start).total_seconds())
+    # Round only the payable overtime up to a 15-minute block.
+    overtime_minutes = int((overtime_seconds + 899) // 900) * 15
+    return max(0, int(regular_seconds // 60) + overtime_minutes - shift.effective_break_minutes)
 
 
 def _salary_amount(minutes, hourly_wage):
@@ -875,7 +887,7 @@ def _actual_shift_work_minutes(shift, fallback_minutes):
     if not shift.actual_start_time or not shift.actual_end_time:
         return fallback_minutes
     break_minutes = shift.shift_type.break_minutes if shift.shift_type and shift.shift_type.break_minutes else 0
-    return _time_range_minutes(shift.actual_start_time, shift.actual_end_time, break_minutes)
+    return _time_range_minutes(shift.actual_start_time, shift.actual_end_time, shift.effective_break_minutes)
 
 
 def _time_range_minutes(start_time, end_time, break_minutes=0):
@@ -1036,12 +1048,12 @@ def _save_actual_work_times(request, work_date, staff_members, existing_shifts):
 
         if request.POST.get(f'actual_day_off_{staff.id}') == '1':
             shift = shift or Shift(staff=staff, work_date=work_date)
-            pending_updates.append((shift, None, None, True))
+            pending_updates.append((shift, None, None, True, None))
             continue
 
         if not start_value and not end_value:
             if shift:
-                pending_updates.append((shift, None, None, False))
+                pending_updates.append((shift, None, None, False, None))
             continue
 
         if not start_value or not end_value:
@@ -1065,12 +1077,25 @@ def _save_actual_work_times(request, work_date, staff_members, existing_shifts):
         if shift is None:
             shift = Shift(staff=staff, work_date=work_date)
             existing_shifts[staff.id] = shift
-        pending_updates.append((shift, actual_start, actual_end, False))
+        break_value = request.POST.get(f'actual_break_{staff.id}')
+        actual_break = shift.actual_break_minutes
+        if break_value is not None:
+            try:
+                actual_break = int(break_value) if break_value.strip() else None
+                duration = _time_range_minutes(actual_start, actual_end)
+                if actual_break is not None and not 0 <= actual_break <= duration:
+                    raise ValueError
+            except ValueError:
+                messages.error(request, f'{staff.name}さんの休憩は勤務時間以内の0以上の整数（分）で入力してください。')
+                has_error = True
+                continue
+        pending_updates.append((shift, actual_start, actual_end, False, actual_break))
 
     if has_error:
         return False
 
-    for shift, actual_start, actual_end, actual_day_off in pending_updates:
+    for shift, actual_start, actual_end, actual_day_off, actual_break in pending_updates:
+        shift.actual_break_minutes = actual_break
         shift.actual_day_off = actual_day_off
         shift.actual_start_time = actual_start
         shift.actual_end_time = actual_end

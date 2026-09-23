@@ -94,8 +94,8 @@ class ShiftViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, '2026年9月の給料')
         self.assertContains(response, '田中')
-        self.assertContains(response, '8時間')
-        self.assertContains(response, '9,600円')
+        self.assertContains(response, '7時間45分')
+        self.assertContains(response, '9,300円')
 
     def test_salary_list_reflects_fixed_and_variable_deductions(self):
         staff = Staff.objects.create(name='田中', hourly_wage=1200)
@@ -941,3 +941,92 @@ class WageDeleteAndLeaveIntegerTests(TestCase):
             self.assertIn('days', form.errors)
         form = MonthlyPaidLeaveForm(data={'days': '2', 'hours_per_day': '7.5'})
         self.assertTrue(form.is_valid())
+
+
+class ActualBreakTests(TestCase):
+    def test_break_override_changes_work_and_pay_without_changing_plan(self):
+        from .views import _actual_shift_work_minutes, _salary_shift_minutes
+        staff = Staff.objects.create(name='Test', hourly_wage=1200)
+        category = ShiftType.objects.create(code='A', break_minutes=60)
+        shift = Shift.objects.create(staff=staff, shift_type=category, work_date='2026-09-18', start_time='09:00', end_time='17:00')
+        url = reverse('actual_work_edit', args=['2026-09-18'])
+        for value, expected in [('30', 450), ('0', 480), ('', 420)]:
+            response = self.client.post(url, {f'actual_start_{staff.pk}': '09:00', f'actual_end_{staff.pk}': '17:00', f'actual_break_{staff.pk}': value})
+            self.assertEqual(response.status_code, 302)
+            shift.refresh_from_db()
+            self.assertEqual(_actual_shift_work_minutes(shift, 420), expected)
+            self.assertEqual(_salary_shift_minutes(shift), expected)
+            self.assertEqual(shift.planned_break_minutes, 60)
+            self.assertEqual(shift.actual_differs_from_plan, value != '')
+        response = self.client.get(url)
+        self.assertEqual(response.context['rows'][0]['actual_break'], 60)
+
+    def test_invalid_break_does_not_save(self):
+        staff = Staff.objects.create(name='Test')
+        shift = Shift.objects.create(staff=staff, work_date='2026-09-18', start_time='09:00', end_time='17:00')
+        for value in ['-1', '481', '1.5', 'abc']:
+            response = self.client.post(reverse('actual_work_edit', args=['2026-09-18']), {
+                f'actual_start_{staff.pk}': '09:00', f'actual_end_{staff.pk}': '17:00', f'actual_break_{staff.pk}': value,
+            })
+            self.assertEqual(response.status_code, 200)
+            shift.refresh_from_db()
+            self.assertIsNone(shift.actual_start_time)
+            self.assertIsNone(shift.actual_break_minutes)
+
+
+class OvertimeTests(TestCase):
+    def test_only_time_after_category_end_plus_fifteen_counts(self):
+        from datetime import date, time
+        category = ShiftType(code='A', end_time=time(17))
+        self.assertEqual(category.overtime_start_label, '17:15')
+        shift = Shift(shift_type=category, work_date=date(2026, 9, 18), end_time=time(16), actual_start_time=time(9))
+        for end, expected in [(time(17), 0), (time(17, 14), 0), (time(17, 15), 0), (time(17, 16), 1), (time(17, 30), 15)]:
+            shift.actual_end_time = end
+            self.assertEqual(shift.overtime_minutes, expected)
+        shift.actual_day_off = True
+        self.assertEqual(shift.overtime_minutes, 0)
+        shift.actual_day_off = False
+        shift.actual_start_time = time(17, 20)
+        self.assertEqual(shift.overtime_minutes, 10)
+        shift.shift_type = None
+        self.assertEqual(shift.overtime_minutes, 0)
+
+    def test_no_overtime_for_unregistered_or_day_off(self):
+        from datetime import date, time
+        shift = Shift(work_date=date(2026, 9, 18), shift_type=ShiftType(code='A', end_time=time(17)))
+        self.assertEqual(shift.overtime_minutes, 0)
+        shift.shift_type = ShiftType(code='\u4f11')
+        self.assertEqual(shift.shift_type.overtime_start_label, '-')
+        self.assertEqual(shift.overtime_minutes, 0)
+        category = ShiftType(code='A', end_time=time(23, 50))
+        self.assertEqual(category.overtime_start_label, '\u7fcc\u65e5 00:05')
+
+
+class PayrollRoundingTests(TestCase):
+    def test_payable_overtime_boundaries_and_early_start(self):
+        from datetime import date, time
+        from .views import _salary_shift_minutes, _actual_shift_work_minutes
+        category = ShiftType(code='A', start_time=time(9), end_time=time(17), break_minutes=60)
+        shift = Shift(shift_type=category, work_date=date(2026, 9, 18), start_time=time(9), end_time=time(17), actual_start_time=time(8, 30))
+        for end, minutes in [(time(16, 30), 390), (time(17), 420), (time(17, 14), 420), (time(17, 15), 420), (time(17, 16), 435), (time(17, 30), 435), (time(17, 31), 450), (time(17, 45), 450), (time(17, 46), 465)]:
+            with self.subTest(end=end):
+                shift.actual_end_time = end
+                self.assertEqual(_salary_shift_minutes(shift), minutes)
+        self.assertEqual(_actual_shift_work_minutes(shift, 0), 496)
+        shift.actual_start_time = time(9, 30)
+        shift.actual_end_time = time(17, 16)
+        self.assertEqual(_salary_shift_minutes(shift), 405)
+        shift.actual_break_minutes = 30
+        self.assertEqual(_salary_shift_minutes(shift), 435)
+        shift.actual_day_off = True
+        self.assertEqual(_salary_shift_minutes(shift), 0)
+
+    def test_no_schedule_uses_recorded_work_and_schedule_fallback(self):
+        from datetime import date, time
+        from .views import _salary_shift_minutes
+        shift = Shift(work_date=date(2026, 9, 18), actual_start_time=time(9), actual_end_time=time(17, 16), actual_break_minutes=30)
+        self.assertEqual(_salary_shift_minutes(shift), 466)
+        shift.start_time, shift.end_time = time(9), time(17)
+        self.assertEqual(_salary_shift_minutes(shift), 465)
+        shift.actual_start_time, shift.actual_end_time = None, None
+        self.assertEqual(_salary_shift_minutes(shift), 480)

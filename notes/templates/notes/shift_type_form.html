@@ -39,6 +39,8 @@
                 </div>
             </div>
 
+            <label for="overtime_start">残業開始（終了時刻＋15分）</label>
+            <output id="overtime_start" class="calculated-output">{{ shift_type.overtime_start_label|default:'-' }}</output>
             <label for="color">色</label>
             <div class="color-select-row">
                 <select id="color" name="color">
@@ -94,6 +96,15 @@
             const isDayOff = codeSelect.value === '休';
             const start = timeToMinutes(startTimeInput.value);
             const end = timeToMinutes(endTimeInput.value);
+            const overtimeOutput = document.querySelector('#overtime_start');
+            if (isDayOff || end === null) {
+                overtimeOutput.value = '-';
+            } else {
+                const threshold = end + 15;
+                const hours = String(Math.floor(threshold / 60) % 24).padStart(2, '0');
+                const minutes = String(threshold % 60).padStart(2, '0');
+                overtimeOutput.value = `${threshold >= 1440 ? '翌日 ' : ''}${hours}:${minutes}`;
+            }
             const breakMinutes = Number(breakSelect.value || 0);
 
             if (isDayOff || start === null || end === null || !breakSelect.value || end <= start) {

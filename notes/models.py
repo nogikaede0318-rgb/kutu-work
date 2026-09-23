@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
@@ -160,6 +160,15 @@ class ShiftType(models.Model):
         return self.code
 
     @property
+    def overtime_start_label(self):
+        if self.code == '休' or not self.end_time:
+            return '-'
+        end = datetime.combine(datetime.today(), self.end_time)
+        threshold = end + timedelta(minutes=15)
+        prefix = '翌日 ' if threshold.date() != end.date() else ''
+        return f'{prefix}{threshold:%H:%M}'
+
+    @property
     def work_minutes(self):
         if not self.start_time or not self.end_time:
             return None
@@ -194,6 +203,25 @@ class Shift(models.Model):
     actual_start_time = models.TimeField('実働開始時刻', blank=True, null=True)
     actual_end_time = models.TimeField('実働終了時刻', blank=True, null=True)
     actual_day_off = models.BooleanField('実働休み', default=False)
+    actual_break_minutes = models.PositiveSmallIntegerField('実働休憩（分）', blank=True, null=True)
+
+    @property
+    def planned_break_minutes(self):
+        return (self.shift_type.break_minutes or 0) if self.shift_type else 0
+
+    @property
+    def effective_break_minutes(self):
+        return self.actual_break_minutes if self.actual_break_minutes is not None else self.planned_break_minutes
+
+    @property
+    def overtime_minutes(self):
+        if (self.actual_day_off or not self.shift_type or self.shift_type.code == '休'
+                or not self.shift_type.end_time or not self.actual_start_time or not self.actual_end_time):
+            return 0
+        threshold = datetime.combine(self.work_date, self.shift_type.end_time) + timedelta(minutes=15)
+        start = max(threshold, datetime.combine(self.work_date, self.actual_start_time))
+        end = datetime.combine(self.work_date, self.actual_end_time)
+        return max(0, int((end - start).total_seconds() // 60))
 
     @property
     def actual_display_label(self):
@@ -209,7 +237,8 @@ class Shift(models.Model):
         if self.actual_day_off:
             return not planned_off
         if self.actual_start_time and self.actual_end_time:
-            return planned_off or (self.actual_start_time, self.actual_end_time) != (self.start_time, self.end_time)
+            return (planned_off or (self.actual_start_time, self.actual_end_time) != (self.start_time, self.end_time)
+                    or self.effective_break_minutes != self.planned_break_minutes)
         return False
 
     @property

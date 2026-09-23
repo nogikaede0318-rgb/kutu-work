@@ -18,6 +18,7 @@
                         <p>{% if shift_type.start_time and shift_type.end_time %}{{ shift_type.start_time|time:'H:i' }}-{{ shift_type.end_time|time:'H:i' }}{% else %}時間なし{% endif %}</p>
                         {% if shift_type.code != '休' %}
                             <p>休憩: {{ shift_type.break_minutes|default:'-' }}分 / 稼働: {{ shift_type.work_duration_label }}</p>
+                            <p>残業開始: {{ shift_type.overtime_start_label }}（終了時刻＋15分）</p>
                         {% endif %}
                     </div>
                     <div class="actions">

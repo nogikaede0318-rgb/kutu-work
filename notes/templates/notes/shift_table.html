@@ -105,6 +105,7 @@
                                                     {% elif is_actual_view %}
                                                         <a class="shift-chip actual-chip {{ cell.shift.actual_change_class }}" href="{% url 'actual_work_edit' cell.day|date:'Y-m-d' %}?view=actual">
                                                             <strong>{{ cell.shift.actual_display_label|default:'未登録' }}</strong>
+                                                            {% if cell.shift.actual_start_time and not cell.shift.actual_day_off %}<span class="actual-time-details">休憩{{ cell.shift.effective_break_minutes }}分{% if cell.shift.overtime_minutes %}・残業{{ cell.shift.overtime_minutes }}分{% endif %}</span>{% endif %}
                                                         </a>
                                                     {% elif cell.shift %}
                                                         <a
