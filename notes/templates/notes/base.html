@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="{% static 'notes/styles.css' %}?v=role-colors-1">
 </head>
 <body>
+    <div class="fixed-page-header" data-fixed-page-header>
     <header class="app-header">
         <a class="brand" href="{% url 'shift_table' %}">シフト管理表</a>
         <nav class="top-nav">
@@ -17,9 +18,11 @@
             <a href="{% url 'salary_list' %}">給料</a>
         </nav>
     </header>
+        <div class="fixed-page-controls" data-fixed-page-controls></div>
+    </div>
     <main class="container">
         {% if messages %}
-            <div class="messages">
+            <div class="messages" role="status" aria-live="polite">
                 {% for message in messages %}
                     <p class="message {{ message.tags }}">{{ message }}</p>
                 {% endfor %}
@@ -29,5 +32,6 @@
     </main>
     {% block scripts %}{% endblock %}
     <script src="{% static 'notes/day_off.js' %}" defer></script>
+    <script src="{% static 'notes/page_header.js' %}" defer></script>
 </body>
 </html>

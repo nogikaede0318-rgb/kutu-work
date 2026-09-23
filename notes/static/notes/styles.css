@@ -4,7 +4,7 @@
     --surface: #ffffff;
     --ink: #2a171b;
     --muted: #7b6268;
-    --line: #ead0d7;
+    --line: #90757d;
     --accent: #c73b66;
     --accent-dark: #9f2d50;
     --danger: #b7283e;
@@ -237,12 +237,14 @@ button:hover {
     height: 36px;
     background: #f3f4f6;
     text-align: center;
+    color: #211419;
+    font-weight: 700;
 }
 
 .shift-table .weekday-cell,
 .shift-table .weekday-heading {
-    color: var(--muted);
-    font-weight: 500;
+    color: #211419;
+    font-weight: 700;
 }
 
 .shift-table .date-cell {
@@ -272,11 +274,11 @@ button:hover {
 }
 
 .shift-table .saturday-cell {
-    color: #2266aa;
+    color: #124a82;
 }
 
 .shift-table .holiday-cell {
-    color: #b33a3a;
+    color: #921f2f;
 }
 
 .shift-table thead .saturday-cell {
@@ -1200,6 +1202,70 @@ select:focus {
     }
 }
 
+.fixed-page-header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--bg);
+    box-shadow: 0 2px 5px rgba(42, 23, 27, 0.08);
+}
+
+.fixed-page-controls {
+    width: min(1280px, calc(100% - 32px));
+    margin: 0 auto;
+    padding: 12px 0;
+}
+
+.fixed-page-controls:empty {
+    display: none;
+}
+
+.fixed-page-controls .page-title,
+.fixed-page-controls .form-actions,
+.fixed-page-controls .bulk-actions {
+    margin: 0;
+}
+
+.fixed-page-controls .page-title p {
+    margin: 4px 0 0;
+}
+
+.fixed-page-controls .form-actions,
+.fixed-page-controls .bulk-actions {
+    margin-top: 8px;
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+html {
+    scroll-padding-top: calc(var(--fixed-header-height, 0px) + 16px);
+}
+
+@media screen and (max-width: 640px) {
+    .fixed-page-header .app-header {
+        padding: 8px 16px;
+        gap: 8px;
+    }
+
+    .fixed-page-header .top-nav {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .fixed-page-controls .table-header {
+        gap: 8px;
+    }
+
+    .fixed-page-controls h1 {
+        font-size: 1.3rem;
+    }
+
+    .fixed-page-controls .shift-action-nav,
+    .fixed-page-controls .month-nav {
+        flex-wrap: wrap;
+    }
+}
+
 .print-calendar {
     display: none;
 }
@@ -1252,13 +1318,29 @@ select:focus {
 }
 
 @media print {
+    .fixed-page-header {
+        position: static;
+        box-shadow: none;
+        background: #fff;
+    }
+
+    .fixed-page-controls {
+        width: 100%;
+        padding: 0;
+    }
+
+    .fixed-page-controls .form-actions,
+    .fixed-page-controls .bulk-actions {
+        display: none !important;
+    }
+
     @page {
         size: A4 landscape;
         margin: 6mm;
     }
 
     :root {
-        --line: #cfcfcf;
+        --line: #555555;
         --ink: #111111;
         --muted: #555555;
     }
@@ -1334,7 +1416,7 @@ select:focus {
     .print-shift-table th,
     .print-shift-table td {
         padding: 0;
-        border: 0.2mm solid var(--line);
+        border: 0.3mm solid var(--line);
         text-align: center;
         vertical-align: middle;
         overflow-wrap: anywhere;
@@ -1345,6 +1427,8 @@ select:focus {
         font-size: 8pt;
         white-space: nowrap;
         background: #efefef;
+        color: #111111;
+        font-weight: 700;
     }
 
     .print-shift-table tbody th {
@@ -1356,11 +1440,11 @@ select:focus {
     }
 
     .print-shift-table .saturday-cell {
-        color: #245a91;
+        color: #124a82;
     }
 
     .print-shift-table .holiday-cell {
-        color: #b42e44;
+        color: #921f2f;
     }
 
     .print-day-off {

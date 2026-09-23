@@ -4,7 +4,7 @@
     <section class="page-title table-header">
         <div>
             <h1>{{ selected_month|date:'Y年n月' }}のシフト（{% if is_actual_view %}実働{% else %}予定{% endif %}）</h1>
-            {% if is_actual_view %}<div class="actual-legend">※：予定から変更／未登録：実働の入力なし</div>{% endif %}
+            {% if is_actual_view %}<div class="actual-legend">(変更)：予定から変更／未登録：実働の入力なし</div>{% endif %}
         </div>
         <div class="shift-toolbar">
             <div class="shift-action-nav">
@@ -104,7 +104,7 @@
                                                         </div>
                                                     {% elif is_actual_view %}
                                                         <a class="shift-chip actual-chip {% if cell.shift.actual_differs_from_plan %}actual-changed{% endif %}" href="{% url 'actual_work_edit' cell.day|date:'Y-m-d' %}?view=actual">
-                                                            <strong>{{ cell.shift.actual_display_label|default:'未登録' }}{% if cell.shift.actual_differs_from_plan %} ※{% endif %}</strong>
+                                                            <strong>{{ cell.shift.actual_display_label|default:'未登録' }}{% if cell.shift.actual_differs_from_plan %} (変更){% endif %}</strong>
                                                         </a>
                                                     {% elif cell.shift %}
                                                         <a
