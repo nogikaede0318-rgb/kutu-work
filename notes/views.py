@@ -35,7 +35,7 @@ def shift_table(request):
         return redirect(f'{request.path}?month={selected_month:%Y-%m}')
 
     staff_members = Staff.objects.all()
-    shifts = Shift.objects.filter(work_date__range=(first_day, last_day)).select_related('staff')
+    shifts = Shift.objects.filter(work_date__range=(first_day, last_day)).select_related('staff', 'shift_type')
     shift_map = {(shift.staff_id, shift.work_date): shift for shift in shifts}
     shift_types = ShiftType.objects.all()
     role_choices = ['店内・トイレ掃除', '店内掃除', '銀行・トイレ掃除']
@@ -69,11 +69,27 @@ def shift_table(request):
         ]
         weeks.append({'days': day_headers, 'rows': week_rows})
 
+    print_sections = []
+    for start, end in [(1, 10), (11, 20), (21, last_day.day)]:
+        days = [selected_month.replace(day=number) for number in range(start, end + 1)]
+        print_sections.append({
+            'days': [
+                {'date': day, 'class_name': _calendar_day_class(day, selected_month)}
+                for day in days
+            ],
+            'rows': [
+                {'staff': staff, 'cells': [shift_map.get((staff.pk, day)) for day in days]}
+                for staff in staff_members
+            ],
+        })
+
     return render(
         request,
         'notes/shift_table.html',
         {
             'weeks': weeks,
+            'print_sections': print_sections,
+            'print_font_size': min(8, 100 / max(len(staff_members), 1)),
             'selected_month': selected_month,
             'month_choices': [
                 date(year, month, 1)

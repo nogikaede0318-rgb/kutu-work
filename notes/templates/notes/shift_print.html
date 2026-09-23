@@ -1,0 +1,38 @@
+{% load l10n %}
+<div class="print-calendar" style="--print-font-size: {{ print_font_size|unlocalize }}pt;">
+    {% for section in print_sections %}
+        <table class="print-shift-table">
+            <colgroup>
+                <col class="print-staff-column">
+                {% for day in section.days %}<col>{% endfor %}
+            </colgroup>
+            <thead>
+                <tr>
+                    <th scope="col">スタッフ</th>
+                    {% for day in section.days %}
+                        <th scope="col" class="{{ day.class_name }}">{{ day.date|date:'j' }}({{ day.date|date:'D' }})</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in section.rows %}
+                    <tr>
+                        <th scope="row">{{ row.staff.name }}</th>
+                        {% for shift in row.cells %}
+                            <td {% if shift.shift_type.code == '休' %}class="print-day-off"{% elif shift.shift_type.color %}style="background-color: {{ shift.shift_type.color }};"{% endif %}>
+                                {% if shift %}
+                                    {% if shift.shift_type.code == '休' %}
+                                        休
+                                    {% else %}
+                                        <div class="print-shift-time">{% if shift.shift_type %}{{ shift.shift_type.code }} {% endif %}{{ shift.start_time|time:'H:i' }}-{{ shift.end_time|time:'H:i' }}</div>
+                                        {% if shift.role %}<div>{{ shift.role }}</div>{% endif %}
+                                    {% endif %}
+                                {% endif %}
+                            </td>
+                        {% endfor %}
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% endfor %}
+</div>

@@ -1199,6 +1199,10 @@ select:focus {
     }
 }
 
+.print-calendar {
+    display: none;
+}
+
 @media print {
     @page {
         size: A4 landscape;
@@ -1213,7 +1217,7 @@ select:focus {
 
     html,
     body {
-        width: 297mm;
+        width: auto;
         min-height: auto;
         background: #ffffff;
         color: var(--ink);
@@ -1222,6 +1226,7 @@ select:focus {
     }
 
     .app-header,
+    .shift-toolbar,
     .month-nav,
     .page-title p,
     .messages,
@@ -1253,8 +1258,65 @@ select:focus {
     }
 
     .calendar-stack {
+        display: none;
+    }
+
+    .print-calendar {
         display: grid;
-        gap: 1.5mm;
+        grid-template-rows: repeat(3, minmax(0, 1fr));
+        gap: 3mm;
+        height: 180mm;
+        break-inside: avoid;
+    }
+
+    .print-shift-table {
+        width: 100%;
+        height: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+        font-size: var(--print-font-size);
+        line-height: 1.15;
+        break-inside: avoid;
+    }
+
+    .print-staff-column {
+        width: 22mm;
+    }
+
+    .print-shift-table th,
+    .print-shift-table td {
+        padding: 0;
+        border: 0.2mm solid var(--line);
+        text-align: center;
+        vertical-align: middle;
+        overflow-wrap: anywhere;
+    }
+
+    .print-shift-table thead {
+        height: 5mm;
+        font-size: 8pt;
+        white-space: nowrap;
+        background: #efefef;
+    }
+
+    .print-shift-table tbody th {
+        background: #f2eeee;
+    }
+
+    .print-shift-time {
+        white-space: nowrap;
+    }
+
+    .print-shift-table .saturday-cell {
+        color: #245a91;
+    }
+
+    .print-shift-table .holiday-cell {
+        color: #b42e44;
+    }
+
+    .print-day-off {
+        background: #e8e8e8;
     }
 
     .week-panel {

@@ -566,3 +566,27 @@ class MonthNavigationTests(TestCase):
             'direction': 'subtract', 'fixed_amount': '100',
         })
         self.assertRedirects(response, reverse('salary_settings') + '?month=2025-02')
+
+
+class ShiftPrintTests(TestCase):
+    def test_print_sections_cover_month_once(self):
+        Staff.objects.create(name='Print test')
+        for month, length in [('2025-02', 28), ('2024-02', 29), ('2025-04', 30), ('2025-03', 31)]:
+            with self.subTest(month=month):
+                response = self.client.get(reverse('shift_table'), {'month': month})
+                sections = response.context['print_sections']
+                self.assertEqual([len(section['days']) for section in sections], [10, 10, length - 20])
+                self.assertEqual(
+                    [day['date'].day for section in sections for day in section['days']],
+                    list(range(1, length + 1)),
+                )
+                self.assertContains(response, 'class="print-shift-table"', count=3)
+
+    def test_print_header_and_shift_assignment(self):
+        staff = Staff.objects.create(name='Print test')
+        shift = Shift.objects.create(staff=staff, work_date='2025-03-21', start_time='09:00', end_time='17:00')
+        response = self.client.get(reverse('shift_table'), {'month': '2025-03'})
+        self.assertContains(response, '1(\u571f)')
+        sections = response.context['print_sections']
+        self.assertIsNone(sections[0]['rows'][0]['cells'][0])
+        self.assertEqual(sections[2]['rows'][0]['cells'][0], shift)
