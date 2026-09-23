@@ -22,6 +22,7 @@
                         <th>実働開始</th>
                         <th>実働終了</th>
                         <th>休み</th>
+                        <th>予定どおり</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -49,6 +50,14 @@
                                 <input type="hidden" name="actual_day_off_{{ row.staff.pk }}" value="{% if row.actual_day_off %}1{% else %}0{% endif %}" data-actual-day-off>
                                 <button type="button" class="day-off-button" data-actual-off-button aria-pressed="{% if row.actual_day_off %}true{% else %}false{% endif %}">休</button>
                             </td>
+                            <td>
+                                <button type="button" class="outline-button" data-actual-unchanged aria-pressed="false"
+                                    data-planned-start="{{ row.shift.start_time|time:'H:i' }}"
+                                    data-planned-end="{{ row.shift.end_time|time:'H:i' }}"
+                                    data-planned-off="{% if row.is_day_off %}1{% else %}0{% endif %}"
+                                    {% if not row.is_day_off %}{% if not row.shift.start_time or not row.shift.end_time %}disabled title="予定が登録されていません"{% endif %}{% endif %}
+                                >変更なし</button>
+                            </td>
                         </tr>
                     {% endfor %}
                 </tbody>
@@ -63,12 +72,35 @@
 
 {% block scripts %}
     <script>
+        document.querySelectorAll('[data-actual-unchanged]').forEach((button) => {
+            const row = button.closest('[data-actual-row]');
+            row.querySelectorAll('input[type="time"]').forEach((input) => {
+                input.addEventListener('input', () => button.setAttribute('aria-pressed', 'false'));
+            });
+            button.addEventListener('click', () => {
+                button.setAttribute('aria-pressed', 'true');
+                const row = button.closest('[data-actual-row]');
+                const isOff = button.dataset.plannedOff === '1';
+                row.querySelector('[data-actual-day-off]').value = isOff ? '1' : '0';
+                row.querySelector('[data-actual-off-button]').setAttribute('aria-pressed', String(isOff));
+                row.classList.toggle('actual-day-off', isOff);
+                const start = row.querySelector('input[name^="actual_start_"]');
+                const end = row.querySelector('input[name^="actual_end_"]');
+                start.value = isOff ? '' : button.dataset.plannedStart;
+                end.value = isOff ? '' : button.dataset.plannedEnd;
+                [start, end].forEach((input) => {
+                    input.disabled = isOff;
+                    input.dataset.previousValue = input.value;
+                });
+            });
+        });
         document.querySelectorAll('[data-actual-off-button]').forEach((button) => {
             const row = button.closest('[data-actual-row]');
             const state = row.querySelector('[data-actual-day-off]');
             const inputs = row.querySelectorAll('input[type="time"]');
             button.addEventListener('click', () => {
                 const isOff = state.value !== '1';
+                row.querySelector('[data-actual-unchanged]').setAttribute('aria-pressed', 'false');
                 state.value = isOff ? '1' : '0';
                 button.setAttribute('aria-pressed', String(isOff));
                 row.classList.toggle('actual-day-off', isOff);

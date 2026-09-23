@@ -426,7 +426,8 @@ button:hover {
     color: var(--ink);
 }
 
-.day-off-button[aria-pressed="true"] {
+.day-off-button[aria-pressed="true"],
+[data-actual-unchanged][aria-pressed="true"] {
     border-color: var(--accent);
     background: #ffe8ef;
     color: var(--accent);

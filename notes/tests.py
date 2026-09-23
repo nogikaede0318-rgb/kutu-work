@@ -606,8 +606,10 @@ class ActualDayOffTests(TestCase):
         self.assertIsNone(shift.actual_start_time)
         self.assertEqual(_actual_shift_work_minutes(shift, 480), 0)
         self.assertEqual(_salary_shift_minutes(shift), 0)
-        self.assertContains(response, 'aria-pressed="true"')
-        self.assertIsNone(response.context['rows'][0]['actual_start'])
+        self.assertRedirects(response, reverse('shift_table') + '?month=2025-03')
+        edit_response = self.client.get(url)
+        self.assertContains(edit_response, 'aria-pressed="true"')
+        self.assertIsNone(edit_response.context['rows'][0]['actual_start'])
         self.client.post(url, {
             f'actual_day_off_{staff.pk}': '0',
             f'actual_start_{staff.pk}': '10:00', f'actual_end_{staff.pk}': '16:00',
@@ -668,5 +670,5 @@ class ActualTableTests(TestCase):
         staff = Staff.objects.create(name='Test')
         url = reverse('actual_work_edit', args=['2025-03-01']) + '?view=actual'
         response = self.client.post(url, {f'actual_day_off_{staff.pk}': '1'}, follow=True)
-        self.assertRedirects(response, url)
+        self.assertRedirects(response, reverse('shift_table') + '?month=2025-03&view=actual')
         self.assertContains(response, reverse('shift_table') + '?month=2025-03&view=actual')

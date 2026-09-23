@@ -442,7 +442,7 @@ def actual_work_edit(request, work_date):
     if request.method == 'POST':
         if _save_actual_work_times(request, target_date, staff_members, shifts):
             messages.success(request, '実働時間を保存しました。')
-            return redirect(reverse('actual_work_edit', kwargs={'work_date': f'{target_date:%Y-%m-%d}'}) + ('?view=actual' if request.GET.get('view') == 'actual' else ''))
+            return redirect(_month_url('shift_table', target_date) + ('&view=actual' if request.GET.get('view') == 'actual' else ''))
 
     rows = []
     for staff in staff_members:
