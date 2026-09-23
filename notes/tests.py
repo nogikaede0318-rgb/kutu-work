@@ -725,13 +725,13 @@ class PaidLeaveTests(TestCase):
         staff = Staff.objects.create(name='Test', hourly_wage=1200)
         url = reverse('staff_salary_settings', args=[staff.pk])
         response = self.client.post(url + '?month=2026-09', {
-            'hourly_wage': '1200', 'paid_leave-days': '1.5', 'paid_leave-hours_per_day': '7.5',
+            'hourly_wage': '1200', 'paid_leave-days': '2', 'paid_leave-hours_per_day': '7.5',
         })
         self.assertEqual(response.status_code, 302)
         leave = MonthlyPaidLeave.objects.get()
-        self.assertEqual(leave.amount, 13500)
+        self.assertEqual(leave.amount, 18000)
         response = self.client.get(reverse('salary_list'), {'month': '2026-09'})
-        self.assertEqual(response.context['rows'][0]['gross_amount'], '13,500\u5186')
+        self.assertEqual(response.context['rows'][0]['gross_amount'], '18,000\u5186')
         self.assertEqual(response.context['rows'][0]['work_duration'], '0\u6642\u9593')
         response = self.client.get(reverse('salary_list'), {'month': '2026-10'})
         self.assertEqual(response.context['rows'][0]['gross_amount'], '0\u5186')
@@ -739,7 +739,7 @@ class PaidLeaveTests(TestCase):
             'hourly_wage': '1200', 'paid_leave-days': '2', 'paid_leave-hours_per_day': '8',
         })
         leave.refresh_from_db()
-        self.assertEqual(leave.amount, 13500)
+        self.assertEqual(leave.amount, 18000)
         self.assertEqual(MonthlyPaidLeave.objects.count(), 2)
         self.client.post(url + '?month=2026-09', {
             'hourly_wage': '1200', 'paid_leave-days': '0', 'paid_leave-hours_per_day': '7.5',
@@ -828,8 +828,6 @@ class WagePeriodTests(TestCase):
         self.assertEqual(len(response.context['wage_periods'].forms), 2)
         self.assertContains(response, 'data-add-wage-period')
         data['wages-INITIAL_FORMS'] = '2'
-        data.pop('wages-0-effective_month')
-        data.pop('wages-1-effective_month')
         data['wages-0-hourly_wage'] = '1150'
         self.assertEqual(self.client.post(url, data).status_code, 302)
         self.assertEqual(staff.wages_for_month(date(2026, 9, 1)), (1150, None))
@@ -912,3 +910,34 @@ class StaffPaidLeaveHoursTests(TestCase):
             staff.refresh_from_db()
             self.assertEqual(staff.name, 'Test')
             self.assertEqual(staff.paid_leave_hours_per_day, 8)
+
+
+class WageDeleteAndLeaveIntegerTests(TestCase):
+    def test_change_month_and_delete_periods(self):
+        from datetime import date
+        from .models import StaffWageHistory
+        staff = Staff.objects.create(name='Test', hourly_wage=1000)
+        StaffWageHistory.objects.create(staff=staff, effective_month=date.min, hourly_wage=1000)
+        StaffWageHistory.objects.create(staff=staff, effective_month=date(2026, 9, 1), hourly_wage=1200)
+        StaffWageHistory.objects.create(staff=staff, effective_month=date(2026, 10, 1), hourly_wage=1400)
+        data = {'name': 'Test', 'wages-TOTAL_FORMS': '2', 'wages-INITIAL_FORMS': '2',
+                'wages-0-effective_month': '2026-08', 'wages-0-hourly_wage': '1300',
+                'wages-1-effective_month': '2026-10', 'wages-1-hourly_wage': '1400', 'wages-1-DELETE': 'on'}
+        response = self.client.post(reverse('staff_update', args=[staff.pk]), data)
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(staff.wage_history.filter(effective_month=date(2026, 9, 1)).exists())
+        self.assertFalse(staff.wage_history.filter(effective_month=date(2026, 10, 1)).exists())
+        self.assertEqual(staff.wages_for_month(date(2026, 10, 1)), (1300, None))
+        data.update({'wages-TOTAL_FORMS': '1', 'wages-INITIAL_FORMS': '1', 'wages-0-DELETE': 'on'})
+        response = self.client.post(reverse('staff_salary_settings', args=[staff.pk]), data)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(staff.wages_for_month(date(2026, 10, 1)), (1000, None))
+
+    def test_fractional_paid_leave_is_rejected(self):
+        from .forms import MonthlyPaidLeaveForm
+        for days in ['0.5', '1.5', '-1']:
+            form = MonthlyPaidLeaveForm(data={'days': days, 'hours_per_day': '7.5'})
+            self.assertFalse(form.is_valid())
+            self.assertIn('days', form.errors)
+        form = MonthlyPaidLeaveForm(data={'days': '2', 'hours_per_day': '7.5'})
+        self.assertTrue(form.is_valid())

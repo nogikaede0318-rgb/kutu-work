@@ -32,10 +32,6 @@
             <div class="salary-item-list">
                 {% for row in rows %}
                     <div class="salary-item-row">
-                        <div>
-                            <strong>{{ row.deduction.name }}</strong>
-                            <span>{{ row.direction_label }} / {% if row.is_fixed %}固定{% else %}変動{% endif %}</span>
-                        </div>
                         <label class="switch-row salary-active-switch" for="deduction-active-{{ row.deduction.pk }}">
                             <span>適用</span>
                             <input
@@ -46,8 +42,13 @@
                             >
                             <b aria-hidden="true"></b>
                         </label>
+                        <div class="salary-item-name">
+                            <strong>{{ row.deduction.name }}<small>（{% if row.is_fixed %}固定{% else %}変動{% endif %}）</small></strong>
+                        </div>
+                        <div class="salary-item-amount">
+                            <span class="salary-item-sign">{{ row.direction_label }}</span>
                         {% if row.is_fixed %}
-                            <input type="number" value="{{ row.amount }}" disabled>
+                            <input type="number" value="{{ row.amount }}" aria-label="{{ row.deduction.name }}の金額" disabled>
                         {% else %}
                             <input
                                 name="deduction_amount_{{ row.deduction.pk }}"
@@ -55,8 +56,11 @@
                                 min="0"
                                 step="1"
                                 value="{{ row.amount }}"
+                                aria-label="{{ row.deduction.name }}の金額"
                             >
                         {% endif %}
+                            <span>円</span>
+                        </div>
                     </div>
                 {% empty %}
                     <p class="muted-text">給料設定で差引項目を追加してください。</p>

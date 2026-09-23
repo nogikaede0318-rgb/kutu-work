@@ -1347,6 +1347,24 @@ html {
     min-width: 0;
 }
 
+.settings-card .wage-delete {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    color: var(--danger);
+}
+
+.wage-delete input {
+    width: auto;
+}
+
+.wage-period:has(.wage-delete input:checked) {
+    opacity: 0.55;
+    border-style: dashed;
+}
+
 .settings-editor.form-panel,
 .settings-editor.settings-panel {
     max-width: 960px;
@@ -1436,13 +1454,39 @@ html {
 }
 
 .settings-card .salary-item-row {
-    grid-template-columns: minmax(0, 1fr) 100px 150px;
+    grid-template-columns: 100px minmax(0, 1fr) 210px;
     border-color: #dfcfd4;
     padding: 16px;
 }
 
 .settings-card .salary-item-row input[type="number"] {
     text-align: right;
+    min-width: 0;
+    width: 100%;
+}
+
+.salary-item-name {
+    overflow-wrap: anywhere;
+}
+
+.salary-item-name small {
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-weight: 400;
+    white-space: nowrap;
+}
+
+.salary-item-amount {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+}
+
+.salary-item-amount .salary-item-sign {
+    color: var(--ink);
+    font-weight: 700;
+    font-size: 1.1rem;
 }
 
 .settings-editor .errorlist {
@@ -1482,11 +1526,11 @@ html {
     }
 
     .settings-card .salary-item-row {
-        grid-template-columns: minmax(0, 1fr) 90px;
+        grid-template-columns: 90px minmax(0, 1fr);
     }
 
-    .settings-card .salary-item-row input[type="number"] {
-        grid-column: 1 / -1;
+    .settings-card .salary-item-amount {
+        grid-column: 2;
     }
 }
 

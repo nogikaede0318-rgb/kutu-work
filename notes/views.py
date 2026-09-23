@@ -195,12 +195,7 @@ def staff_update(request, pk):
         updated_staff = _build_staff_from_request(request, staff=staff)
         if updated_staff:
             if has_periods:
-                changes = [form.cleaned_data for form in wage_periods if form.cleaned_data]
-                for change in sorted(changes, key=lambda item: item['effective_month']):
-                    _record_wage_change(staff, change['effective_month'], change['hourly_wage'], change['holiday_hourly_wage'], previous_wages)
-                latest = max(changes, key=lambda item: item['effective_month'])
-                updated_staff.hourly_wage = latest['hourly_wage']
-                updated_staff.holiday_hourly_wage = latest['holiday_hourly_wage']
+                _save_wage_periods(staff, wage_periods, previous_wages)
             elif previous_wages != (updated_staff.hourly_wage, updated_staff.holiday_hourly_wage):
                 _record_wage_change(staff, effective_month, updated_staff.hourly_wage, updated_staff.holiday_hourly_wage, previous_wages)
             updated_staff.save()
@@ -375,14 +370,16 @@ def staff_salary_settings(request, pk):
         paid_leave_valid = paid_leave_form.is_valid() if has_paid_leave_data else True
         if wages_valid and paid_leave_valid:
             previous_wages = (staff.hourly_wage, staff.holiday_hourly_wage)
-            for change in sorted(changes, key=lambda item: item['effective_month']):
-                month = change['effective_month']
-                weekday, holiday = change['hourly_wage'], change['holiday_hourly_wage']
-                if has_periods or staff.wages_for_month(month) != (weekday, holiday):
-                    _record_wage_change(staff, month, weekday, holiday, previous_wages)
-            latest = max(changes, key=lambda item: item['effective_month'])
-            staff.hourly_wage = latest['hourly_wage']
-            staff.holiday_hourly_wage = latest['holiday_hourly_wage']
+            if has_periods:
+                _save_wage_periods(staff, wage_periods, previous_wages)
+            else:
+                for change in changes:
+                    month = change['effective_month']
+                    weekday, holiday = change['hourly_wage'], change['holiday_hourly_wage']
+                    if staff.wages_for_month(month) != (weekday, holiday):
+                        _record_wage_change(staff, month, weekday, holiday, previous_wages)
+                staff.hourly_wage = changes[0]['hourly_wage']
+                staff.holiday_hourly_wage = changes[0]['holiday_hourly_wage']
             staff.save(update_fields=['hourly_wage', 'holiday_hourly_wage'])
             if has_paid_leave_data:
                 paid_leave_form.save()
@@ -702,6 +699,22 @@ def _wage_effective_month(request, fallback):
     except ValueError:
         messages.error(request, '時給の適用開始月を正しく入力してください。')
         return None
+
+
+def _save_wage_periods(staff, formset, previous_wages):
+    baseline, _ = StaffWageHistory.objects.get_or_create(
+        staff=staff, effective_month=date.min,
+        defaults={'hourly_wage': previous_wages[0], 'holiday_hourly_wage': previous_wages[1]},
+    )
+    changes = [form.cleaned_data for form in formset
+               if form.cleaned_data and not form.cleaned_data.get('DELETE')]
+    staff.wage_history.exclude(effective_month=date.min).delete()
+    for change in changes:
+        _record_wage_change(staff, change['effective_month'], change['hourly_wage'],
+                            change['holiday_hourly_wage'], previous_wages)
+    latest = staff.wage_history.order_by('-effective_month').first() or baseline
+    staff.hourly_wage = latest.hourly_wage
+    staff.holiday_hourly_wage = latest.holiday_hourly_wage
 
 
 def _record_wage_change(staff, month, weekday, holiday, previous_wages):
