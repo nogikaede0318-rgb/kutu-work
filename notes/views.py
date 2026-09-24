@@ -12,6 +12,9 @@ from .forms import MonthlyPaidLeaveForm, WagePeriodFormSet
 from .models import (
     BREAK_MINUTE_CHOICES,
     SHIFT_TYPE_CODES,
+    LEAVE_TYPE_CODES,
+    WORK_TYPE_CODES,
+    LEAVE_TYPE_COLORS,
     SHIFT_TYPE_COLOR_VALUES,
     SHIFT_TYPE_COLORS,
     DEDUCTION_AMOUNT_TYPES,
@@ -150,7 +153,7 @@ def staff_list(request):
         staff_shifts = [shift for shift in shifts if shift.staff_id == staff.id]
         for shift in staff_shifts:
             stats = monthly_stats[shift.work_date.month - 1]
-            if shift.shift_type and shift.shift_type.code == '休':
+            if shift.shift_type and shift.shift_type.is_leave:
                 stats['holiday_days'] += 1
             elif shift.start_time and shift.end_time:
                 stats['work_days'] += 1
@@ -433,7 +436,9 @@ def shift_type_list(request):
     return render(
         request,
         'notes/shift_type_list.html',
-        {'shift_types': shift_types, 'available_codes': available_codes},
+        {'shift_types': shift_types, 'available_codes': available_codes,
+         'work_types': [item for item in shift_types if not item.is_leave],
+         'leave_types': [item for item in shift_types if item.is_leave]},
     )
 
 
@@ -447,7 +452,7 @@ def shift_type_create(request):
     return render(
         request,
         'notes/shift_type_form.html',
-        _shift_type_form_context(None),
+        _shift_type_form_context(None, request.GET.get('kind') == 'leave' or request.POST.get('kind') == 'leave'),
     )
 
 
@@ -534,7 +539,7 @@ def actual_work_edit(request, work_date):
             {
                 'staff': staff,
                 'shift': shift,
-                'is_day_off': shift.shift_type.code == '休' if shift and shift.shift_type else False,
+                'is_day_off': shift.shift_type.is_leave if shift and shift.shift_type else False,
                 'planned_label': _shift_time_label(shift),
                 'actual_start': initial_start,
                 'actual_day_off': actual_day_off,
@@ -750,7 +755,7 @@ def _salary_shift_minutes(shift):
     if shift.actual_day_off:
         return 0
     if not shift.actual_start_time or not shift.actual_end_time:
-        if shift.shift_type and shift.shift_type.code == '休':
+        if shift.shift_type and shift.shift_type.is_leave:
             return 0
         return _shift_work_minutes(shift) if shift.start_time and shift.end_time else 0
 
@@ -916,8 +921,8 @@ def _format_signed_minutes(minutes):
 def _shift_time_label(shift):
     if not shift:
         return '予定なし'
-    if shift.shift_type and shift.shift_type.code == '休':
-        return '休'
+    if shift.shift_type and shift.shift_type.is_leave:
+        return shift.shift_type.code
     if shift.start_time and shift.end_time:
         return f'{shift.start_time:%H:%M}-{shift.end_time:%H:%M}'
     return '時間なし'
@@ -1009,7 +1014,7 @@ def _build_shift_from_request(request, shift=None):
         messages.error(request, '入力内容を確認してください。')
         return None
 
-    is_day_off = shift_type is not None and shift_type.code == '休'
+    is_day_off = shift_type is not None and shift_type.is_leave
     parsed_start = None
     parsed_end = None
     if not is_day_off:
@@ -1134,7 +1139,7 @@ def _save_bulk_shifts(request, first_day, last_day):
 
             shift = existing_shift or Shift(staff=staff, work_date=work_date)
             shift.shift_type = shift_type
-            if shift_type.code == '休':
+            if shift_type.is_leave:
                 shift.start_time = None
                 shift.end_time = None
                 shift.role = ''
@@ -1152,17 +1157,26 @@ def _build_shift_type_from_request(request, shift_type=None):
     end_time = request.POST.get('end_time', '').strip()
     break_minutes = request.POST.get('break_minutes', '').strip()
 
+    is_leave = code in dict(LEAVE_TYPE_CODES)
+    if request.POST.get('kind') in {'work', 'leave'} and is_leave != (request.POST['kind'] == 'leave'):
+        messages.error(request, '区分の種類を確認してください。')
+        return None
     if code not in dict(SHIFT_TYPE_CODES):
-        messages.error(request, '区分は休またはA〜Zから選択してください。')
+        messages.error(request, '一覧から区分を選択してください。')
         return None
 
-    if code != '休' and color not in SHIFT_TYPE_COLOR_VALUES:
+    if not is_leave and color not in SHIFT_TYPE_COLOR_VALUES:
         messages.error(request, '色を選択してください。')
         return None
 
-    if code == '休':
-        color = ''
-        break_minutes = ''
+    if is_leave:
+        if color and color not in dict(LEAVE_TYPE_COLORS):
+            messages.error(request, '休暇の色を選択してください。')
+            return None
+        if not color and code != '休':
+            messages.error(request, '色を選択してください。')
+            return None
+        break_minutes = start_time = end_time = ''
 
     if color:
         duplicate_color = ShiftType.objects.filter(color=color)
@@ -1175,12 +1189,12 @@ def _build_shift_type_from_request(request, shift_type=None):
     parsed_start = None
     parsed_end = None
     parsed_break_minutes = None
-    if code != '休' and (not start_time or not end_time):
+    if not is_leave and (not start_time or not end_time):
         messages.error(request, '開始時刻と終了時刻を入力してください。')
         return None
 
     break_values = {str(value) for value, _label in BREAK_MINUTE_CHOICES}
-    if code != '休' and break_minutes not in break_values:
+    if not is_leave and break_minutes not in break_values:
         messages.error(request, '休憩時間を選択してください。')
         return None
     if break_minutes:
@@ -1208,14 +1222,15 @@ def _build_shift_type_from_request(request, shift_type=None):
     if shift_type is None:
         shift_type = ShiftType()
     shift_type.code = code
-    shift_type.color = None if code == '休' else color
-    shift_type.start_time = None if code == '休' else parsed_start
-    shift_type.end_time = None if code == '休' else parsed_end
-    shift_type.break_minutes = None if code == '休' else parsed_break_minutes
+    shift_type.color = color or None
+    shift_type.start_time = None if is_leave else parsed_start
+    shift_type.end_time = None if is_leave else parsed_end
+    shift_type.break_minutes = None if is_leave else parsed_break_minutes
     return shift_type
 
 
-def _shift_type_form_context(shift_type):
+def _shift_type_form_context(shift_type, is_leave=False):
+    is_leave = shift_type.is_leave if shift_type else is_leave
     used_colors = set(ShiftType.objects.exclude(color__isnull=True).values_list('color', flat=True))
     if shift_type and shift_type.color:
         used_colors.discard(shift_type.color)
@@ -1226,11 +1241,12 @@ def _shift_type_form_context(shift_type):
             'is_used': color in used_colors,
             'is_selected': bool(shift_type and shift_type.color == color),
         }
-        for color, label in SHIFT_TYPE_COLORS
+        for color, label in (LEAVE_TYPE_COLORS if is_leave else SHIFT_TYPE_COLORS)
     ]
     return {
         'shift_type': shift_type,
-        'codes': SHIFT_TYPE_CODES,
+        'codes': LEAVE_TYPE_CODES if is_leave else WORK_TYPE_CODES,
+        'is_leave': is_leave,
         'colors': colors,
         'break_choices': BREAK_MINUTE_CHOICES,
     }

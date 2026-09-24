@@ -19,13 +19,13 @@
                     <tr>
                         <th scope="row">{{ row.staff.name }}</th>
                         {% for shift in row.cells %}
-                            <td {% if is_actual_view %}class="{{ shift.actual_change_class }}"{% elif shift.shift_type.code == '休' %}class="print-day-off"{% elif shift.shift_type.color %}style="background-color: {{ shift.shift_type.color }};"{% endif %}>
+                            <td {% if is_actual_view %}class="{{ shift.actual_change_class }}"{% elif shift.shift_type.color %}style="background-color: {{ shift.shift_type.background_color }}; color: {{ shift.shift_type.text_color }};"{% elif shift.shift_type.is_leave %}class="print-day-off"{% endif %}>
                                 {% if is_actual_view %}
                                     <div class="print-shift-time">{{ shift.actual_display_label|default:'未登録' }}</div>
                                     {% if shift.actual_start_time and not shift.actual_day_off %}<div class="actual-time-details">休憩{{ shift.effective_break_minutes }}分{% if shift.overtime_minutes %}・残業{{ shift.overtime_minutes }}分{% endif %}</div>{% endif %}
                                 {% elif shift %}
-                                    {% if shift.shift_type.code == '休' %}
-                                        休
+                                    {% if shift.shift_type.is_leave %}
+                                        {{ shift.shift_type.code }}
                                     {% else %}
                                         <div class="print-shift-time">{% if shift.shift_type %}{{ shift.shift_type.code }} {% endif %}{{ shift.start_time|time:'H:i' }}-{{ shift.end_time|time:'H:i' }}</div>
                                         {% if shift.role %}<div>{{ shift.role }}</div>{% endif %}

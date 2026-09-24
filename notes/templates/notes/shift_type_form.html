@@ -2,9 +2,10 @@
 
 {% block content %}
     <section class="form-panel">
-        <h1>{% if shift_type %}勤務区分編集{% else %}勤務区分追加{% endif %}</h1>
+        <h1>{% if is_leave %}休暇区分{% else %}勤務区分{% endif %}{% if shift_type %}編集{% else %}追加{% endif %}</h1>
         <form method="post">
             {% csrf_token %}
+            <input type="hidden" name="kind" value="{% if is_leave %}leave{% else %}work{% endif %}">
             <label for="code">区分</label>
             <select id="code" name="code" required>
                 {% for code, label in codes %}
@@ -12,7 +13,7 @@
                 {% endfor %}
             </select>
 
-            <div class="field-grid">
+            <div class="field-grid"{% if is_leave %} hidden{% endif %}>
                 <div>
                     <label for="start_time">開始時刻</label>
                     <input id="start_time" name="start_time" type="time" value="{% if shift_type.start_time %}{{ shift_type.start_time|time:'H:i' }}{% endif %}">
@@ -23,7 +24,7 @@
                 </div>
             </div>
 
-            <div class="field-grid">
+            <div class="field-grid"{% if is_leave %} hidden{% endif %}>
                 <div>
                     <label for="break_minutes">休憩</label>
                     <select id="break_minutes" name="break_minutes">
@@ -39,8 +40,8 @@
                 </div>
             </div>
 
-            <label for="overtime_start">残業開始（終了時刻＋15分）</label>
-            <output id="overtime_start" class="calculated-output">{{ shift_type.overtime_start_label|default:'-' }}</output>
+            <div{% if is_leave %} hidden{% endif %}><label for="overtime_start">残業開始（終了時刻＋15分）</label>
+            <output id="overtime_start" class="calculated-output">{{ shift_type.overtime_start_label|default:'-' }}</output></div>
             <label for="color">色</label>
             <div class="color-select-row">
                 <select id="color" name="color">
@@ -93,7 +94,7 @@
         }
 
         function updateWorkDuration() {
-            const isDayOff = codeSelect.value === '休';
+            const isDayOff = {% if is_leave %}true{% else %}false{% endif %};
             const start = timeToMinutes(startTimeInput.value);
             const end = timeToMinutes(endTimeInput.value);
             const overtimeOutput = document.querySelector('#overtime_start');
@@ -119,7 +120,7 @@
         }
 
         function applyCode() {
-            const isDayOff = codeSelect.value === '休';
+            const isDayOff = {% if is_leave %}true{% else %}false{% endif %};
             timeInputs.forEach((input) => {
                 input.disabled = isDayOff;
                 input.required = !isDayOff;
@@ -132,11 +133,7 @@
             if (isDayOff) {
                 breakSelect.value = '';
             }
-            colorSelect.required = !isDayOff;
-            colorSelect.disabled = isDayOff;
-            if (isDayOff) {
-                colorSelect.value = '';
-            }
+            colorSelect.required = codeSelect.value !== '休';
             updateWorkDuration();
             updateColorPreview();
         }

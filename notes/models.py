@@ -4,7 +4,11 @@ from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 
 
-SHIFT_TYPE_CODES = [('休', '休')] + [(chr(code), chr(code)) for code in range(ord('A'), ord('Z') + 1)]
+LEAVE_TYPE_CODES = [('休', '休'), ('希望休', '希望休'), ('指定休', '指定休'), ('その他', 'その他')]
+WORK_TYPE_CODES = [(chr(code), chr(code)) for code in range(ord('A'), ord('Z') + 1)]
+SHIFT_TYPE_CODES = LEAVE_TYPE_CODES + WORK_TYPE_CODES
+LEAVE_TYPE_COLORS = [('#DC2626', '赤'), ('#222222', '黒'), ('#808080', 'グレー'), ('#F97316', 'オレンジ')]
+
 SHIFT_TYPE_COLORS = [
     ('#FADADD', '赤系1'),
     ('#FFDDD2', '赤系2'),
@@ -143,8 +147,8 @@ class StaffSalaryDeduction(models.Model):
 
 
 class ShiftType(models.Model):
-    code = models.CharField('区分', max_length=1, choices=SHIFT_TYPE_CODES, unique=True)
-    color = models.CharField('色', max_length=7, choices=SHIFT_TYPE_COLORS, unique=True, blank=True, null=True)
+    code = models.CharField('区分', max_length=8, choices=SHIFT_TYPE_CODES, unique=True)
+    color = models.CharField('色', max_length=7, choices=SHIFT_TYPE_COLORS + LEAVE_TYPE_COLORS, unique=True, blank=True, null=True)
     start_time = models.TimeField('開始時刻', blank=True, null=True)
     end_time = models.TimeField('終了時刻', blank=True, null=True)
     break_minutes = models.PositiveSmallIntegerField('休憩', choices=BREAK_MINUTE_CHOICES, blank=True, null=True)
@@ -154,6 +158,18 @@ class ShiftType(models.Model):
         verbose_name = '勤務区分'
         verbose_name_plural = '勤務区分'
 
+    @property
+    def is_leave(self):
+        return self.code in dict(LEAVE_TYPE_CODES)
+
+    @property
+    def text_color(self):
+        return (self.color or '#555555') if self.is_leave else '#2a171b'
+
+    @property
+    def background_color(self):
+        return '#e8e8e8' if self.is_leave else (self.color or '')
+
     def __str__(self):
         if self.start_time and self.end_time:
             return f'{self.code} {self.start_time:%H:%M}-{self.end_time:%H:%M}'
@@ -161,7 +177,7 @@ class ShiftType(models.Model):
 
     @property
     def overtime_start_label(self):
-        if self.code == '休' or not self.end_time:
+        if self.is_leave or not self.end_time:
             return '-'
         end = datetime.combine(datetime.today(), self.end_time)
         threshold = end + timedelta(minutes=15)
@@ -215,7 +231,7 @@ class Shift(models.Model):
 
     @property
     def overtime_minutes(self):
-        if (self.actual_day_off or not self.shift_type or self.shift_type.code == '休'
+        if (self.actual_day_off or not self.shift_type or self.shift_type.is_leave
                 or not self.shift_type.end_time or not self.actual_start_time or not self.actual_end_time):
             return 0
         threshold = datetime.combine(self.work_date, self.shift_type.end_time) + timedelta(minutes=15)
@@ -233,7 +249,7 @@ class Shift(models.Model):
 
     @property
     def actual_differs_from_plan(self):
-        planned_off = bool(self.shift_type and self.shift_type.code == '休')
+        planned_off = bool(self.shift_type and self.shift_type.is_leave)
         if self.actual_day_off:
             return not planned_off
         if self.actual_start_time and self.actual_end_time:
@@ -247,7 +263,7 @@ class Shift(models.Model):
             return ''
         if self.actual_day_off:
             return 'actual-changed-off'
-        if self.shift_type and self.shift_type.code == '休':
+        if self.shift_type and self.shift_type.is_leave:
             return 'actual-changed-work'
         return 'actual-changed'
 

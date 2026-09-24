@@ -1,0 +1,18 @@
+        <div class="type-list">
+            {% for shift_type in shift_types %}
+                <article class="type-card {% if shift_type.is_leave %}leave-type-card{% endif %}">
+                    <strong {% if shift_type.color %}style="background-color: {{ shift_type.background_color }}; color: {{ shift_type.text_color }};"{% endif %}>{{ shift_type.code }}</strong>
+                    <div>
+                        <p>{% if shift_type.is_leave %}休暇{% elif shift_type.start_time and shift_type.end_time %}{{ shift_type.start_time|time:'H:i' }}-{{ shift_type.end_time|time:'H:i' }}{% else %}時間なし{% endif %}</p>
+                        {% if not shift_type.is_leave %}
+                            <p>休憩: {{ shift_type.break_minutes|default:'-' }}分 / 稼働: {{ shift_type.work_duration_label }}</p>
+                            <p>残業開始: {{ shift_type.overtime_start_label }}（終了時刻＋15分）</p>
+                        {% endif %}
+                    </div>
+                    <div class="actions">
+                        <a class="outline-button" href="{% url 'shift_type_update' shift_type.pk %}">編集</a>
+                        <a class="outline-button danger-outline" href="{% url 'shift_type_delete' shift_type.pk %}">削除</a>
+                    </div>
+                </article>
+            {% endfor %}
+        </div>

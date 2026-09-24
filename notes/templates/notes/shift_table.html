@@ -80,22 +80,29 @@
                                                             <div class="shift-type-controls">
                                                                 <select name="shift_type_{{ cell.field_key }}" data-shift-type-select>
                                                                     <option value="">未設定</option>
-                                                                    {% for shift_type in shift_types %}
+                                                                    {% regroup shift_types by is_leave as type_groups %}
+                {% for group in type_groups %}
+                    <optgroup label="{% if group.grouper %}休暇区分{% else %}勤務区分{% endif %}">
+                    {% for shift_type in group.list %}
                                                                         <option
                                                                             value="{{ shift_type.pk }}"
-                                                                            data-color="{{ shift_type.color|default:'' }}"
+                                                                            data-color="{{ shift_type.background_color }}"
                                                                             data-code="{{ shift_type.code }}"
+                                                                            data-leave="{{ shift_type.is_leave|yesno:'true,false' }}"
+                                                                            data-text-color="{{ shift_type.text_color }}"
                                                                             {% if cell.shift.shift_type_id == shift_type.pk %}selected{% endif %}
                                                                         >
                                                                             {{ shift_type.code }}{% if shift_type.start_time and shift_type.end_time %} ({{ shift_type.start_time|time:'H:i' }}-{{ shift_type.end_time|time:'H:i' }}){% endif %}
                                                                         </option>
                                                                     {% endfor %}
+                    </optgroup>
+                {% endfor %}
                                                                 </select>
                                                                 <button type="button" class="day-off-button" data-day-off-button>休</button>
                                                             </div>
                                                             <input id="role_{{ cell.field_key }}" name="role_{{ cell.field_key }}" type="hidden" value="{{ cell.shift.role|default:'' }}">
                                                             <button
-                                                                class="role-modal-button {% if cell.shift.role and cell.shift.shift_type.code != '休' %}role-modal-button-colored{% endif %}"
+                                                                class="role-modal-button {% if cell.shift.role and not cell.shift.shift_type.is_leave %}role-modal-button-colored{% endif %}"
                                                                 type="button"
                                                                 data-role-target="role_{{ cell.field_key }}"
                                                             >
@@ -103,19 +110,19 @@
                                                             </button>
                                                         </div>
                                                     {% elif is_actual_view %}
-                                                        <a class="shift-chip actual-chip {{ cell.shift.actual_change_class }}" href="{% url 'actual_work_edit' cell.day|date:'Y-m-d' %}?view=actual">
+                                                        <a class="shift-chip actual-chip {{ cell.shift.actual_change_class }} {% if cell.shift.actual_day_off %}shift-chip-leave{% endif %}" href="{% url 'actual_work_edit' cell.day|date:'Y-m-d' %}?view=actual">
                                                             <strong>{{ cell.shift.actual_display_label|default:'未登録' }}</strong>
                                                             {% if cell.shift.actual_start_time and not cell.shift.actual_day_off %}<span class="actual-time-details">休憩{{ cell.shift.effective_break_minutes }}分{% if cell.shift.overtime_minutes %}・残業{{ cell.shift.overtime_minutes }}分{% endif %}</span>{% endif %}
                                                         </a>
                                                     {% elif cell.shift %}
                                                         <a
-                                                            class="shift-chip {% if cell.shift.shift_type.code == '休' %}shift-chip-off{% endif %}"
+                                                            class="shift-chip {% if cell.shift.shift_type.is_leave %}shift-chip-leave{% if not cell.shift.shift_type.color %} shift-chip-off{% endif %}{% endif %}"
                                                             href="{% url 'shift_update' cell.shift.pk %}"
-                                                            {% if cell.shift.shift_type.color and cell.shift.shift_type.code != '休' %}style="background-color: {{ cell.shift.shift_type.color }};"{% endif %}
+                                                            {% if cell.shift.shift_type.color %}style="background-color: {{ cell.shift.shift_type.background_color }}; color: {{ cell.shift.shift_type.text_color }};"{% endif %}
                                                         >
                                                             <strong>
-                                                                {% if cell.shift.shift_type.code == '休' %}
-                                                                    休
+                                                                {% if cell.shift.shift_type.is_leave %}
+                                                                    {{ cell.shift.shift_type.code }}
                                                                 {% else %}
                                                                     {% if cell.shift.shift_type %}
                                                                         <span class="type-badge">{{ cell.shift.shift_type.code }}</span>
@@ -123,7 +130,7 @@
                                                                     {{ cell.shift.start_time|time:'H:i' }}-{{ cell.shift.end_time|time:'H:i' }}
                                                                 {% endif %}
                                                             </strong>
-                                                            {% if cell.shift.role and cell.shift.shift_type.code != '休' %}<span>{{ cell.shift.role }}</span>{% endif %}
+                                                            {% if cell.shift.role and not cell.shift.shift_type.is_leave %}<span>{{ cell.shift.role }}</span>{% endif %}
                                                         </a>
                                                     {% else %}
                                                         <a class="empty-cell" href="{% url 'shift_create' %}?staff={{ row.staff.pk }}&date={{ cell.day|date:'Y-m-d' }}">+</a>
@@ -200,13 +207,15 @@
                 const code = selectedOption?.dataset.code || '';
                 const cell = select.closest('.bulk-edit-cell');
                 const roleButton = cell?.querySelector('.role-modal-button');
-                const shouldColor = color && code !== '休';
+                const isLeave = selectedOption?.dataset.leave === 'true';
+                const shouldColor = Boolean(color);
+                select.style.color = selectedOption?.dataset.textColor || '';
 
                 select.style.backgroundColor = shouldColor ? color : '';
                 select.classList.toggle('bulk-select-colored', Boolean(shouldColor));
                 if (roleButton) {
                     const roleInput = cell?.querySelector('input[type="hidden"][name^="role_"]');
-                    if (code === '休') {
+                    if (isLeave) {
                         applyRoleColor(roleButton, '');
                     } else {
                         applyRoleColor(roleButton, roleInput?.value || '');

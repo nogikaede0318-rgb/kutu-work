@@ -342,6 +342,11 @@ button:hover {
     color: #68706b;
 }
 
+.shift-chip-leave {
+    align-items: center;
+    text-align: center;
+}
+
 .shift-chip-off strong {
     color: #5f6662;
     width: 100%;
@@ -1229,6 +1234,19 @@ select:focus {
     z-index: 100;
     background: var(--bg);
     box-shadow: 0 2px 5px rgba(42, 23, 27, 0.08);
+}
+
+.leave-type-card {
+    grid-template-columns: 96px minmax(0, 1fr);
+}
+
+.leave-type-card > strong {
+    width: 96px;
+    font-size: 1rem;
+}
+
+.field-grid[hidden] {
+    display: none;
 }
 
 @media screen {

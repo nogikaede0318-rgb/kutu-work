@@ -78,17 +78,23 @@
             <div class="shift-type-controls">
                 <select id="shift_type" name="shift_type">
                     <option value="">区分なし</option>
-                    {% for shift_type in shift_types %}
+                    {% regroup shift_types by is_leave as type_groups %}
+                {% for group in type_groups %}
+                    <optgroup label="{% if group.grouper %}休暇区分{% else %}勤務区分{% endif %}">
+                    {% for shift_type in group.list %}
                         <option
                             value="{{ shift_type.pk }}"
                             data-start="{{ shift_type.start_time|time:'H:i' }}"
                             data-end="{{ shift_type.end_time|time:'H:i' }}"
                             data-code="{{ shift_type.code }}"
+                        data-leave="{{ shift_type.is_leave|yesno:'true,false' }}"
                             {% if shift.shift_type_id == shift_type.pk %}selected{% endif %}
                         >
                             {{ shift_type.code }}{% if shift_type.start_time and shift_type.end_time %} {{ shift_type.start_time|time:'H:i' }}-{{ shift_type.end_time|time:'H:i' }}{% endif %}
                         </option>
                     {% endfor %}
+                    </optgroup>
+                {% endfor %}
                 </select>
                 <button type="button" class="day-off-button" data-day-off-button>休</button>
             </div>
@@ -146,7 +152,7 @@
 
         function applyShiftType() {
             const option = shiftTypeSelect?.selectedOptions[0];
-            const isDayOff = option?.dataset.code === '休';
+            const isDayOff = option?.dataset.leave === 'true';
 
             timeFields.forEach((input) => {
                 input.disabled = isDayOff;
@@ -174,7 +180,7 @@
                 });
                 return;
             }
-            if (option.dataset.code !== '休') {
+            if (option.dataset.leave !== 'true') {
                 startTimeInput.value = option.dataset.start;
                 endTimeInput.value = option.dataset.end;
             }

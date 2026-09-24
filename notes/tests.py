@@ -5,6 +5,9 @@ from .models import SalaryDeduction, Shift, ShiftType, Staff, StaffSalaryDeducti
 
 
 class ShiftViewTests(TestCase):
+    def setUp(self):
+        ShiftType.objects.all().delete()
+
     def test_can_create_staff(self):
         response = self.client.post(
             reverse('staff_create'),
@@ -1030,3 +1033,57 @@ class PayrollRoundingTests(TestCase):
         self.assertEqual(_salary_shift_minutes(shift), 465)
         shift.actual_start_time, shift.actual_end_time = None, None
         self.assertEqual(_salary_shift_minutes(shift), 480)
+
+
+class LeaveTypeTests(TestCase):
+    def test_default_leave_types_and_separate_forms(self):
+        expected = {'\u5e0c\u671b\u4f11': '#DC2626', '\u6307\u5b9a\u4f11': '#222222', '\u305d\u306e\u4ed6': '#F97316'}
+        for code, color in expected.items():
+            leave = ShiftType.objects.get(code=code)
+            self.assertTrue(leave.is_leave)
+            self.assertEqual(leave.color, color)
+        response = self.client.get(reverse('shift_type_create'), {'kind': 'leave'})
+        self.assertTrue(response.context['is_leave'])
+        self.assertContains(response, '#808080')
+        self.assertNotIn(('A', 'A'), response.context['codes'])
+        response = self.client.get(reverse('shift_type_create'), {'kind': 'work'})
+        self.assertFalse(response.context['is_leave'])
+        self.assertEqual(len(response.context['codes']), 26)
+
+    def test_leave_saves_without_times_and_renders_color_and_name(self):
+        from .views import _salary_shift_minutes
+        staff = Staff.objects.create(name='Test')
+        leave = ShiftType.objects.get(code='\u5e0c\u671b\u4f11')
+        response = self.client.post(reverse('shift_create'), {
+            'staff': staff.pk, 'work_date': '2026-09-18', 'shift_type': leave.pk,
+        })
+        self.assertEqual(response.status_code, 302)
+        shift = Shift.objects.get(staff=staff)
+        self.assertIsNone(shift.start_time)
+        self.assertEqual(_salary_shift_minutes(shift), 0)
+        response = self.client.get(reverse('shift_table'), {'month': '2026-09'})
+        self.assertContains(response, leave.code)
+        self.assertContains(response, 'background-color: #e8e8e8; color: #DC2626;')
+        response = self.client.post(reverse('shift_type_update', args=[leave.pk]), {
+            'kind': 'leave', 'code': leave.code, 'color': '#808080',
+        })
+        self.assertEqual(response.status_code, 302)
+        leave.refresh_from_db()
+        self.assertEqual(leave.color, '#808080')
+        self.assertIsNone(leave.end_time)
+
+    def test_leave_bulk_save_and_actual_work(self):
+        from datetime import time
+        from .views import _salary_shift_minutes
+        staff = Staff.objects.create(name='Test')
+        leave = ShiftType.objects.get(code='\u6307\u5b9a\u4f11')
+        response = self.client.post(reverse('shift_table') + '?month=2026-09&mode=edit', {
+            f'shift_type_{staff.pk}_20260918': str(leave.pk),
+        })
+        self.assertEqual(response.status_code, 302)
+        shift = Shift.objects.get(staff=staff)
+        self.assertEqual(shift.shift_type, leave)
+        self.assertIsNone(shift.start_time)
+        shift.actual_start_time, shift.actual_end_time = time(9), time(10)
+        self.assertEqual(shift.actual_change_class, 'actual-changed-work')
+        self.assertEqual(_salary_shift_minutes(shift), 60)
