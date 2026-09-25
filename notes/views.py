@@ -253,9 +253,9 @@ def salary_list(request):
         rows.append(
             {
                 'staff': staff,
-                'work_duration': _format_minutes(staff_minutes),
-                'weekday_duration': _format_minutes(weekday_minutes),
-                'holiday_duration': _format_minutes(holiday_minutes),
+                'work_duration': _format_salary_hours(staff_minutes),
+                'weekday_duration': _format_salary_hours(weekday_minutes),
+                'holiday_duration': _format_salary_hours(holiday_minutes),
                 'paid_leave_days': paid_leave.days if paid_leave else 0,
                 'paid_leave_amount': _format_yen(paid_leave_amount),
                 'gross_amount': _format_yen(gross_amount),
@@ -274,9 +274,14 @@ def salary_list(request):
         {
             'rows': rows,
             'selected_month': selected_month,
+            'month_choices': [
+                date(year, month, 1)
+                for year in range(max(1, selected_month.year - 2), min(9999, selected_month.year + 2) + 1)
+                for month in range(1, 13)
+            ],
             'previous_month': previous_month,
             'next_month': next_month,
-            'total_duration': _format_minutes(total_minutes),
+            'total_duration': _format_salary_hours(total_minutes),
             'total_gross_amount': _format_yen(total_gross_amount),
             'total_adjustment_amount': _format_yen(total_adjustment_amount, signed=True),
             'total_net_amount': _format_yen(total_net_amount),
@@ -900,6 +905,10 @@ def _time_range_minutes(start_time, end_time, break_minutes=0):
     end_at = datetime.combine(datetime.today(), end_time)
     minutes = int((end_at - start_at).total_seconds() // 60)
     return max(0, minutes - break_minutes)
+
+
+def _format_salary_hours(minutes):
+    return f'{minutes / 60:05.2f}h'
 
 
 def _format_minutes(minutes):

@@ -97,7 +97,7 @@ class ShiftViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, '2026年9月の給料')
         self.assertContains(response, '田中')
-        self.assertContains(response, '7時間45分')
+        self.assertContains(response, '07.75h')
         self.assertContains(response, '9,300円')
 
     def test_salary_list_reflects_fixed_and_variable_deductions(self):
@@ -735,7 +735,7 @@ class PaidLeaveTests(TestCase):
         self.assertEqual(leave.amount, 18000)
         response = self.client.get(reverse('salary_list'), {'month': '2026-09'})
         self.assertEqual(response.context['rows'][0]['gross_amount'], '18,000\u5186')
-        self.assertEqual(response.context['rows'][0]['work_duration'], '0\u6642\u9593')
+        self.assertEqual(response.context['rows'][0]['work_duration'], '00.00h')
         response = self.client.get(reverse('salary_list'), {'month': '2026-10'})
         self.assertEqual(response.context['rows'][0]['gross_amount'], '0\u5186')
         self.client.post(url + '?month=2026-10', {
@@ -1087,3 +1087,20 @@ class LeaveTypeTests(TestCase):
         shift.actual_start_time, shift.actual_end_time = time(9), time(10)
         self.assertEqual(shift.actual_change_class, 'actual-changed-work')
         self.assertEqual(_salary_shift_minutes(shift), 60)
+
+
+class SalaryHoursDisplayTests(TestCase):
+    def test_display_uses_payable_hours_excluding_discarded_time(self):
+        staff = Staff.objects.create(name='Test', hourly_wage=1200)
+        category = ShiftType.objects.create(code='A', start_time='09:00', end_time='17:00', break_minutes=60)
+        Shift.objects.create(staff=staff, shift_type=category, work_date='2026-09-18',
+                             start_time='09:00', end_time='17:00', actual_start_time='08:30', actual_end_time='17:15')
+        Shift.objects.create(staff=staff, shift_type=category, work_date='2026-09-19',
+                             start_time='09:00', end_time='17:00', actual_start_time='08:30', actual_end_time='17:16')
+        response = self.client.get(reverse('salary_list'), {'month': '2026-09'})
+        row = response.context['rows'][0]
+        self.assertEqual(row['weekday_duration'], '07.00h')
+        self.assertEqual(row['holiday_duration'], '07.25h')
+        self.assertEqual(row['work_duration'], '14.25h')
+        self.assertEqual(response.context['total_duration'], '14.25h')
+        self.assertEqual(row['gross_amount'], '17,100\u5186')

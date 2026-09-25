@@ -13,6 +13,11 @@
                 <a href="{% url 'salary_list' %}?month={{ previous_month|date:'Y-m' }}">前月</a>
                 <a href="{% url 'salary_list' %}">今月</a>
                 <a href="{% url 'salary_list' %}?month={{ next_month|date:'Y-m' }}">翌月</a>
+                <select class="month-select" aria-label="表示する年月" data-month-select>
+                    {% for month in month_choices %}
+                        <option value="{% url 'salary_list' %}?month={{ month|date:'Y-m' }}"{% if month == selected_month %} selected{% endif %}>{{ month|date:'Y年n月' }}</option>
+                    {% endfor %}
+                </select>
             </div>
         </div>
     </section>
@@ -62,4 +67,12 @@
             </tbody>
         </table>
     </div>
+{% endblock %}
+
+{% block scripts %}
+    <script>
+        document.querySelector('[data-month-select]')?.addEventListener('change', (event) => {
+            window.location.assign(event.target.value);
+        });
+    </script>
 {% endblock %}
