@@ -780,8 +780,8 @@ def _salary_shift_minutes(shift):
         return _shift_work_minutes(shift) if shift.start_time and shift.end_time else 0
 
     category = shift.effective_shift_type
-    scheduled_start = category.start_time if category and category.start_time else shift.start_time
-    scheduled_end = category.end_time if category and category.end_time else shift.end_time
+    scheduled_start = (category.start_time if category else None) if shift.actual_shift_type_id else (shift.start_time or (category.start_time if category else None))
+    scheduled_end = (category.end_time if category else None) if shift.actual_shift_type_id else (shift.end_time or (category.end_time if category else None))
     if not scheduled_start or not scheduled_end:
         return _actual_shift_work_minutes(shift, 0)
 

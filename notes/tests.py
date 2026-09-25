@@ -1154,6 +1154,16 @@ class ActualShiftTypeTests(TestCase):
 
 
 class SalaryDetailTests(TestCase):
+    def test_saved_schedule_takes_priority_over_category_defaults(self):
+        from datetime import date, time
+        from .views import _salary_shift_minutes, _format_salary_hours
+        shift = Shift(work_date=date(2026, 9, 25),
+                      shift_type=ShiftType(code='A', start_time=time(9, 45), end_time=time(19, 30)),
+                      start_time=time(9, 45), end_time=time(15, 30),
+                      actual_start_time=time(9, 38), actual_end_time=time(15, 31), actual_break_minutes=30)
+        self.assertEqual(_salary_shift_minutes(shift), 315)
+        self.assertEqual(_format_salary_hours(_salary_shift_minutes(shift)), '05.25h')
+
     def test_daily_detail_reconciles_with_payroll_and_distinguishes_fallback(self):
         staff = Staff.objects.create(name='Test', hourly_wage=1200)
         other = Staff.objects.create(name='Other')
