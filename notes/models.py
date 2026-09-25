@@ -39,6 +39,7 @@ SHIFT_TYPE_COLORS = [
 ]
 SHIFT_TYPE_COLOR_VALUES = [color for color, _label in SHIFT_TYPE_COLORS]
 BREAK_MINUTE_CHOICES = [
+    (0, '0分'),
     (30, '30分'),
     (45, '45分'),
     (60, '60分'),
