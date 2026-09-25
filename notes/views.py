@@ -44,7 +44,7 @@ def shift_table(request):
         return redirect(f'{request.path}?month={selected_month:%Y-%m}')
 
     staff_members = Staff.objects.all()
-    shifts = Shift.objects.filter(work_date__range=(first_day, last_day)).select_related('staff', 'shift_type')
+    shifts = Shift.objects.filter(work_date__range=(first_day, last_day)).select_related('staff', 'shift_type', 'actual_shift_type')
     shift_map = {(shift.staff_id, shift.work_date): shift for shift in shifts}
     shift_types = ShiftType.objects.all()
     role_choices = ['店内・トイレ掃除', '店内掃除', '銀行・トイレ掃除']
@@ -213,7 +213,7 @@ def salary_list(request):
     last_day = selected_month.replace(day=calendar.monthrange(selected_month.year, selected_month.month)[1])
     previous_month = (first_day - timedelta(days=1)).replace(day=1)
     next_month = (last_day + timedelta(days=1)).replace(day=1)
-    shifts = Shift.objects.filter(work_date__range=(first_day, last_day)).select_related('shift_type', 'staff')
+    shifts = Shift.objects.filter(work_date__range=(first_day, last_day)).select_related('shift_type', 'staff', 'actual_shift_type')
     deductions = SalaryDeduction.objects.all()
     staff_deduction_settings = {
         (staff_amount.staff_id, staff_amount.deduction_id): staff_amount
@@ -522,7 +522,7 @@ def actual_work_edit(request, work_date):
     staff_members = Staff.objects.all()
     shifts = {
         shift.staff_id: shift
-        for shift in Shift.objects.filter(work_date=target_date).select_related('staff', 'shift_type')
+        for shift in Shift.objects.filter(work_date=target_date).select_related('staff', 'shift_type', 'actual_shift_type')
     }
 
     if request.method == 'POST':
@@ -548,6 +548,7 @@ def actual_work_edit(request, work_date):
                 'planned_label': _shift_time_label(shift),
                 'actual_start': initial_start,
                 'actual_day_off': actual_day_off,
+                'actual_type_id': request.POST.get(f'actual_type_{staff.pk}', '') if request.method == 'POST' else (str(shift.actual_shift_type_id) if shift and shift.actual_shift_type_id else ''),
                 'actual_end': initial_end,
                 'actual_break': request.POST.get(f'actual_break_{staff.pk}', '') if request.method == 'POST' else (shift.effective_break_minutes if shift else 0),
             }
@@ -558,6 +559,7 @@ def actual_work_edit(request, work_date):
         'notes/actual_work_form.html',
         {
             'target_date': target_date,
+            'shift_types': ShiftType.objects.all(),
             'rows': rows,
         },
     )
@@ -764,7 +766,7 @@ def _salary_shift_minutes(shift):
             return 0
         return _shift_work_minutes(shift) if shift.start_time and shift.end_time else 0
 
-    category = shift.shift_type
+    category = shift.effective_shift_type
     scheduled_start = category.start_time if category and category.start_time else shift.start_time
     scheduled_end = category.end_time if category and category.end_time else shift.end_time
     if not scheduled_start or not scheduled_end:
@@ -1055,19 +1057,28 @@ def _build_shift_from_request(request, shift=None):
 def _save_actual_work_times(request, work_date, staff_members, existing_shifts):
     has_error = False
     pending_updates = []
+    types = {str(item.pk): item for item in ShiftType.objects.all()}
     for staff in staff_members:
         start_value = request.POST.get(f'actual_start_{staff.id}', '').strip()
         end_value = request.POST.get(f'actual_end_{staff.id}', '').strip()
         shift = existing_shifts.get(staff.id)
+        selected_type = shift.actual_shift_type if shift else None
+        if f'actual_type_{staff.id}' in request.POST:
+            type_id = request.POST.get(f'actual_type_{staff.id}', '')
+            selected_type = types.get(type_id)
+            if type_id and selected_type is None:
+                messages.error(request, f'{staff.name}さんの実働区分を選び直してください。')
+                has_error = True
+                continue
 
-        if request.POST.get(f'actual_day_off_{staff.id}') == '1':
+        if request.POST.get(f'actual_day_off_{staff.id}') == '1' or (selected_type and selected_type.is_leave):
             shift = shift or Shift(staff=staff, work_date=work_date)
-            pending_updates.append((shift, None, None, True, None))
+            pending_updates.append((shift, None, None, True, None, selected_type))
             continue
 
-        if not start_value and not end_value:
+        if not start_value and not end_value and selected_type is None:
             if shift:
-                pending_updates.append((shift, None, None, False, None))
+                pending_updates.append((shift, None, None, False, None, None))
             continue
 
         if not start_value or not end_value:
@@ -1103,12 +1114,13 @@ def _save_actual_work_times(request, work_date, staff_members, existing_shifts):
                 messages.error(request, f'{staff.name}さんの休憩は勤務時間以内の0以上の整数（分）で入力してください。')
                 has_error = True
                 continue
-        pending_updates.append((shift, actual_start, actual_end, False, actual_break))
+        pending_updates.append((shift, actual_start, actual_end, False, actual_break, selected_type))
 
     if has_error:
         return False
 
-    for shift, actual_start, actual_end, actual_day_off, actual_break in pending_updates:
+    for shift, actual_start, actual_end, actual_day_off, actual_break, selected_type in pending_updates:
+        shift.actual_shift_type = selected_type
         shift.actual_break_minutes = actual_break
         shift.actual_day_off = actual_day_off
         shift.actual_start_time = actual_start

@@ -1104,3 +1104,50 @@ class SalaryHoursDisplayTests(TestCase):
         self.assertEqual(row['work_duration'], '14.25h')
         self.assertEqual(response.context['total_duration'], '14.25h')
         self.assertEqual(row['gross_amount'], '17,100\u5186')
+
+
+class ActualShiftTypeTests(TestCase):
+    def test_actual_category_changes_independently_and_controls_payroll(self):
+        from .views import _salary_shift_minutes
+        staff = Staff.objects.create(name='Test')
+        planned = ShiftType.objects.create(code='A', start_time='09:00', end_time='17:00', break_minutes=60)
+        actual = ShiftType.objects.create(code='B', start_time='10:00', end_time='18:00', break_minutes=30)
+        shift = Shift.objects.create(staff=staff, shift_type=planned, work_date='2026-09-18', start_time='09:00', end_time='17:00')
+        url = reverse('actual_work_edit', args=['2026-09-18'])
+        response = self.client.post(url, {
+            f'actual_type_{staff.pk}': actual.pk, f'actual_start_{staff.pk}': '09:30',
+            f'actual_end_{staff.pk}': '18:16', f'actual_break_{staff.pk}': '',
+        })
+        self.assertEqual(response.status_code, 302)
+        shift.refresh_from_db()
+        self.assertEqual(shift.shift_type, planned)
+        self.assertEqual(str(shift.start_time), '09:00:00')
+        self.assertEqual(str(shift.end_time), '17:00:00')
+        self.assertEqual(shift.actual_shift_type, actual)
+        self.assertEqual(shift.effective_break_minutes, 30)
+        self.assertEqual(shift.overtime_minutes, 1)
+        self.assertEqual(_salary_shift_minutes(shift), 465)
+        self.assertTrue(shift.actual_differs_from_plan)
+        response = self.client.get(url)
+        self.assertEqual(response.context['rows'][0]['actual_type_id'], str(actual.pk))
+        self.client.post(url, {f'actual_type_{staff.pk}': '', f'actual_start_{staff.pk}': '09:00',
+                               f'actual_end_{staff.pk}': '17:00', f'actual_break_{staff.pk}': '60'})
+        shift.refresh_from_db()
+        self.assertIsNone(shift.actual_shift_type)
+        self.assertFalse(shift.actual_differs_from_plan)
+
+    def test_leave_category_and_invalid_category(self):
+        staff = Staff.objects.create(name='Test')
+        planned = ShiftType.objects.create(code='A', start_time='09:00', end_time='17:00')
+        leave = ShiftType.objects.get(code='\u5e0c\u671b\u4f11')
+        shift = Shift.objects.create(staff=staff, shift_type=planned, work_date='2026-09-18', start_time='09:00', end_time='17:00')
+        url = reverse('actual_work_edit', args=['2026-09-18'])
+        self.assertEqual(self.client.post(url, {f'actual_type_{staff.pk}': leave.pk}).status_code, 302)
+        shift.refresh_from_db()
+        self.assertTrue(shift.actual_day_off)
+        self.assertEqual(shift.actual_display_label, leave.code)
+        self.assertEqual(shift.shift_type, planned)
+        self.assertIsNone(shift.actual_start_time)
+        self.assertEqual(self.client.post(url, {f'actual_type_{staff.pk}': '999999'}).status_code, 200)
+        shift.refresh_from_db()
+        self.assertEqual(shift.actual_shift_type, leave)

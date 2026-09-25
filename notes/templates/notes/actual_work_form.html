@@ -19,6 +19,7 @@
                     <tr>
                         <th>スタッフ</th>
                         <th>予定</th>
+                        <th>実働区分</th>
                         <th>実働開始</th>
                         <th>実働終了</th>
                         <th>休憩（分）</th>
@@ -31,6 +32,14 @@
                         <tr class="{% if row.is_day_off or row.actual_day_off %}actual-day-off{% endif %}" data-actual-row>
                             <th>{{ row.staff.name }}</th>
                             <td>{{ row.planned_label }}</td>
+                            <td>
+                                <select name="actual_type_{{ row.staff.pk }}" data-actual-type aria-label="{{ row.staff.name }}さんの実働区分">
+                                    <option value="" data-start="{{ row.shift.start_time|time:'H:i' }}" data-end="{{ row.shift.end_time|time:'H:i' }}" data-break="{{ row.shift.planned_break_minutes|default:0 }}" data-leave="{{ row.is_day_off|yesno:'true,false' }}">予定どおり</option>
+                                    {% for type in shift_types %}
+                                        <option value="{{ type.pk }}" data-start="{{ type.start_time|time:'H:i' }}" data-end="{{ type.end_time|time:'H:i' }}" data-break="{{ type.break_minutes|default:0 }}" data-leave="{{ type.is_leave|yesno:'true,false' }}" {% if row.actual_type_id == type.pk|stringformat:'s' %}selected{% endif %}>{{ type }}</option>
+                                    {% endfor %}
+                                </select>
+                            </td>
                             <td>
                                 <input
                                     type="time"
@@ -77,6 +86,23 @@
 
 {% block scripts %}
     <script>
+        document.querySelectorAll('[data-actual-type]').forEach((select) => {
+            select.addEventListener('change', () => {
+                const row = select.closest('[data-actual-row]');
+                const option = select.selectedOptions[0];
+                const isOff = option.dataset.leave === 'true';
+                row.querySelector('[data-actual-day-off]').value = isOff ? '1' : '0';
+                row.querySelector('[data-actual-off-button]').setAttribute('aria-pressed', String(isOff));
+                row.querySelector('[data-actual-unchanged]').setAttribute('aria-pressed', 'false');
+                row.classList.toggle('actual-day-off', isOff);
+                for (const [name, value] of [['actual_start_', option.dataset.start], ['actual_end_', option.dataset.end], ['actual_break_', option.dataset.break]]) {
+                    const input = row.querySelector(`input[name^="${name}"]`);
+                    input.value = isOff ? '' : value;
+                    input.disabled = isOff;
+                    input.dataset.previousValue = input.value;
+                }
+            });
+        });
         document.querySelectorAll('[data-actual-unchanged]').forEach((button) => {
             const row = button.closest('[data-actual-row]');
             row.querySelectorAll('input[type="time"], input[name^="actual_break_"]').forEach((input) => {
@@ -85,6 +111,7 @@
             button.addEventListener('click', () => {
                 button.setAttribute('aria-pressed', 'true');
                 const row = button.closest('[data-actual-row]');
+                row.querySelector('[data-actual-type]').value = '';
                 const isOff = button.dataset.plannedOff === '1';
                 row.querySelector('[data-actual-day-off]').value = isOff ? '1' : '0';
                 row.querySelector('[data-actual-off-button]').setAttribute('aria-pressed', String(isOff));
@@ -107,6 +134,8 @@
             const inputs = row.querySelectorAll('input[type="time"], input[name^="actual_break_"]');
             button.addEventListener('click', () => {
                 const isOff = state.value !== '1';
+                const typeSelect = row.querySelector('[data-actual-type]');
+                if (!isOff && typeSelect.selectedOptions[0]?.dataset.leave === 'true') typeSelect.value = '';
                 row.querySelector('[data-actual-unchanged]').setAttribute('aria-pressed', 'false');
                 state.value = isOff ? '1' : '0';
                 button.setAttribute('aria-pressed', String(isOff));

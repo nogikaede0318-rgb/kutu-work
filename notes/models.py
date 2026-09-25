@@ -219,6 +219,10 @@ class Shift(models.Model):
     actual_start_time = models.TimeField('実働開始時刻', blank=True, null=True)
     actual_end_time = models.TimeField('実働終了時刻', blank=True, null=True)
     actual_day_off = models.BooleanField('実働休み', default=False)
+    actual_shift_type = models.ForeignKey(
+        ShiftType, verbose_name='実働区分', on_delete=models.SET_NULL,
+        related_name='actual_shifts', blank=True, null=True,
+    )
     actual_break_minutes = models.PositiveSmallIntegerField('実働休憩（分）', blank=True, null=True)
 
     @property
@@ -227,14 +231,20 @@ class Shift(models.Model):
 
     @property
     def effective_break_minutes(self):
-        return self.actual_break_minutes if self.actual_break_minutes is not None else self.planned_break_minutes
+        category = self.effective_shift_type
+        return self.actual_break_minutes if self.actual_break_minutes is not None else ((category.break_minutes or 0) if category else 0)
+
+    @property
+    def effective_shift_type(self):
+        return self.actual_shift_type or self.shift_type
 
     @property
     def overtime_minutes(self):
-        if (self.actual_day_off or not self.shift_type or self.shift_type.is_leave
-                or not self.shift_type.end_time or not self.actual_start_time or not self.actual_end_time):
+        category = self.effective_shift_type
+        if (self.actual_day_off or not category or category.is_leave
+                or not category.end_time or not self.actual_start_time or not self.actual_end_time):
             return 0
-        threshold = datetime.combine(self.work_date, self.shift_type.end_time) + timedelta(minutes=15)
+        threshold = datetime.combine(self.work_date, category.end_time) + timedelta(minutes=15)
         start = max(threshold, datetime.combine(self.work_date, self.actual_start_time))
         end = datetime.combine(self.work_date, self.actual_end_time)
         return max(0, int((end - start).total_seconds() // 60))
@@ -242,6 +252,8 @@ class Shift(models.Model):
     @property
     def actual_display_label(self):
         if self.actual_day_off:
+            if self.actual_shift_type and self.actual_shift_type.is_leave:
+                return self.actual_shift_type.code
             return '休'
         if self.actual_start_time and self.actual_end_time:
             return f'{self.actual_start_time:%H:%M}-{self.actual_end_time:%H:%M}'
@@ -251,10 +263,11 @@ class Shift(models.Model):
     def actual_differs_from_plan(self):
         planned_off = bool(self.shift_type and self.shift_type.is_leave)
         if self.actual_day_off:
-            return not planned_off
+            return not planned_off or bool(self.actual_shift_type_id and self.actual_shift_type_id != self.shift_type_id)
         if self.actual_start_time and self.actual_end_time:
             return (planned_off or (self.actual_start_time, self.actual_end_time) != (self.start_time, self.end_time)
-                    or self.effective_break_minutes != self.planned_break_minutes)
+                    or self.effective_break_minutes != self.planned_break_minutes
+                    or bool(self.actual_shift_type_id and self.actual_shift_type_id != self.shift_type_id))
         return False
 
     @property
