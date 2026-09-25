@@ -57,7 +57,7 @@
                 {% for row in rows %}
                     <tr>
                         <th class="salary-col-staff">{{ row.staff.name }}</th>
-                        <td class="salary-col-time">{{ row.work_duration }}<br><small>平日：{{ row.weekday_duration }}<br>土日祝：{{ row.holiday_duration }}</small></td>
+                        <td class="salary-col-time"><button type="button" class="salary-hours-link" data-salary-detail="salary-detail-{{ row.staff.pk }}" aria-haspopup="dialog" aria-label="{{ row.staff.name }}さんの給与計算時間の内訳">{{ row.work_duration }}</button><br><small>平日：{{ row.weekday_duration }}<br>土日祝：{{ row.holiday_duration }}</small></td>
                         <td class="salary-col-money">{{ row.gross_amount }}<br><small>有給 {{ row.paid_leave_days }}日：{{ row.paid_leave_amount }}</small></td>
                         <td class="salary-col-money">{{ row.adjustment_amount }}</td>
                         <td class="salary-col-money">{{ row.net_amount }}</td>
@@ -67,10 +67,48 @@
             </tbody>
         </table>
     </div>
+    {% for row in rows %}
+        <dialog id="salary-detail-{{ row.staff.pk }}" class="stats-modal" aria-labelledby="salary-detail-title-{{ row.staff.pk }}">
+            <form class="modal-panel" method="dialog">
+                <header class="modal-header">
+                    <div>
+                        <h2 id="salary-detail-title-{{ row.staff.pk }}">{{ row.staff.name }}さんの給与計算時間</h2>
+                        <p>{{ selected_month|date:'Y年n月' }} ／ 合計 {{ row.work_duration }}</p>
+                    </div>
+                    <button class="icon-button" type="submit" aria-label="閉じる">×</button>
+                </header>
+                <p class="muted-text">開始前・終了後15分間と休憩を除き、残業を15分単位で切り上げた時間です。有給は含みません。実働未登録の日は予定を使います。</p>
+                <div class="stats-table-wrap">
+                    <table class="stats-table">
+                        <thead><tr><th>日付</th><th>記録</th><th>開始〜終了</th><th>休憩</th><th>給与計算時間</th></tr></thead>
+                        <tbody>
+                            {% for day in row.daily_salary %}
+                                <tr>
+                                    <th>{{ day.date|date:'n/j(D)' }}</th>
+                                    <td>{{ day.source }}</td>
+                                    <td>{% if day.start and day.end %}{{ day.start|time:'H:i' }}〜{{ day.end|time:'H:i' }}{% else %}—{% endif %}</td>
+                                    <td>{{ day.break_minutes }}分</td>
+                                    <td>{{ day.duration }}</td>
+                                </tr>
+                            {% empty %}
+                                <tr><td colspan="5">この月のシフトはありません。</td></tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot><tr><th colspan="4">合計</th><td>{{ row.work_duration }}</td></tr></tfoot>
+                    </table>
+                </div>
+            </form>
+        </dialog>
+    {% endfor %}
 {% endblock %}
 
 {% block scripts %}
     <script>
+        document.querySelectorAll('[data-salary-detail]').forEach((button) => {
+            button.addEventListener('click', () => {
+                document.getElementById(button.dataset.salaryDetail).showModal();
+            });
+        });
         document.querySelector('[data-month-select]')?.addEventListener('change', (event) => {
             window.location.assign(event.target.value);
         });

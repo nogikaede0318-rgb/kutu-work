@@ -1151,3 +1151,26 @@ class ActualShiftTypeTests(TestCase):
         self.assertEqual(self.client.post(url, {f'actual_type_{staff.pk}': '999999'}).status_code, 200)
         shift.refresh_from_db()
         self.assertEqual(shift.actual_shift_type, leave)
+
+
+class SalaryDetailTests(TestCase):
+    def test_daily_detail_reconciles_with_payroll_and_distinguishes_fallback(self):
+        staff = Staff.objects.create(name='Test', hourly_wage=1200)
+        other = Staff.objects.create(name='Other')
+        category = ShiftType.objects.create(code='A', start_time='09:00', end_time='17:00', break_minutes=60)
+        for day in [18, 19, 20]:
+            Shift.objects.create(staff=staff, shift_type=category, work_date=f'2026-09-{day}',
+                start_time='09:00', end_time='17:00',
+                actual_start_time='08:30' if day == 18 else None,
+                actual_end_time='17:16' if day == 18 else None, actual_day_off=day == 20)
+        Shift.objects.create(staff=other, work_date='2026-09-18', start_time='12:00', end_time='13:00')
+        response = self.client.get(reverse('salary_list'), {'month': '2026-09'})
+        row = next(row for row in response.context['rows'] if row['staff'] == staff)
+        details = row['daily_salary']
+        self.assertEqual([day['date'].day for day in details], [18, 19, 20])
+        self.assertEqual([day['minutes'] for day in details], [435, 420, 0])
+        self.assertEqual(row['work_duration'], '14.25h')
+        self.assertEqual(details[1]['source'], '\u4e88\u5b9a\uff08\u5b9f\u50cd\u672a\u767b\u9332\uff09')
+        self.assertIsNone(details[2]['start'])
+        self.assertContains(response, f'data-salary-detail="salary-detail-{staff.pk}"')
+        self.assertContains(response, '08:30\u301c17:16')

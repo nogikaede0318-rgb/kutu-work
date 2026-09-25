@@ -1487,6 +1487,21 @@ html {
     overflow-wrap: anywhere;
 }
 
+.salary-hours-link {
+    min-height: 34px;
+    padding: 0 4px;
+    background: transparent;
+    color: var(--accent-dark);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.salary-hours-link:hover,
+.salary-hours-link:focus-visible {
+    background: #ffe8ef;
+    color: var(--accent-dark);
+}
+
 .salary-item-name small {
     color: var(--muted);
     font-size: 0.8rem;

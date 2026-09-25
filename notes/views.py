@@ -233,10 +233,22 @@ def salary_list(request):
         staff_minutes = 0
         weekday_minutes = 0
         holiday_minutes = 0
+        daily_salary = []
         for shift in shifts:
             if shift.staff_id != staff.id:
                 continue
             minutes = _salary_shift_minutes(shift)
+            has_actual = bool(shift.actual_start_time and shift.actual_end_time)
+            is_off = shift.actual_day_off or (not has_actual and shift.shift_type and shift.shift_type.is_leave)
+            daily_salary.append({
+                'date': shift.work_date,
+                'start': None if is_off else (shift.actual_start_time if has_actual else shift.start_time),
+                'end': None if is_off else (shift.actual_end_time if has_actual else shift.end_time),
+                'source': '休み' if is_off else ('実働' if has_actual else '予定（実働未登録）'),
+                'break_minutes': 0 if is_off else (shift.effective_break_minutes if has_actual else shift.planned_break_minutes),
+                'minutes': minutes,
+                'duration': _format_salary_hours(minutes),
+            })
             if shift.work_date.weekday() >= 5 or shift.work_date in holidays:
                 holiday_minutes += minutes
             else:
@@ -254,6 +266,7 @@ def salary_list(request):
             {
                 'staff': staff,
                 'work_duration': _format_salary_hours(staff_minutes),
+                'daily_salary': daily_salary,
                 'weekday_duration': _format_salary_hours(weekday_minutes),
                 'holiday_duration': _format_salary_hours(holiday_minutes),
                 'paid_leave_days': paid_leave.days if paid_leave else 0,
