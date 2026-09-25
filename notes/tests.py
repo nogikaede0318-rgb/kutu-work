@@ -5,6 +5,36 @@ from .models import SalaryDeduction, Shift, ShiftType, Staff, StaffSalaryDeducti
 
 
 class ShiftViewTests(TestCase):
+    def test_reset_command_preserves_past_and_resets_future(self):
+        from datetime import date
+        from io import StringIO
+        from unittest.mock import patch
+        from django.core.management import call_command
+
+        staff = Staff.objects.create(name='Command test')
+        deduction = SalaryDeduction.objects.create(name='Fixed allowance', amount_type='fixed', fixed_amount=1000)
+        past = MonthlyStaffSalaryDeduction.objects.create(
+            staff=staff, deduction=deduction, month='2026-09-01', amount=800, is_active=True,
+        )
+        future = MonthlyStaffSalaryDeduction.objects.create(
+            staff=staff, deduction=deduction, month='2027-01-01', amount=900, is_active=True,
+        )
+        with patch('notes.management.commands.reset_salary_adjustments.backup_database', return_value='backup.sqlite3') as backup:
+            call_command('reset_salary_adjustments', from_month='2026-10', stdout=StringIO())
+            backup.assert_not_called()
+            self.assertFalse(StaffSalaryDeduction.objects.exists())
+            call_command('reset_salary_adjustments', from_month='2026-10', apply=True, stdout=StringIO())
+            backup.assert_called_once()
+        setting = StaffSalaryDeduction.objects.get(staff=staff, deduction=deduction)
+        self.assertTrue(setting.for_month(date(2026, 8, 1)).is_active)
+        self.assertEqual(setting.amount, 1000)
+        self.assertFalse(setting.for_month(date(2030, 1, 1)).is_active)
+        self.assertEqual(setting.for_month(date(2030, 1, 1)).amount, 0)
+        past.refresh_from_db()
+        future.refresh_from_db()
+        self.assertEqual((past.amount, past.is_active), (800, True))
+        self.assertEqual((future.amount, future.is_active), (0, False))
+
     def test_adjustment_reset_preserves_past_and_allows_month_override(self):
         staff = Staff.objects.create(name='Reset test')
         deduction = SalaryDeduction.objects.create(name='Allowance', amount_type='variable', direction='add')
