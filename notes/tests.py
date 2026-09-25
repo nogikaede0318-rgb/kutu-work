@@ -1,7 +1,7 @@
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import SalaryDeduction, Shift, ShiftType, Staff, StaffSalaryDeduction
+from .models import SalaryDeduction, Shift, ShiftType, Staff, StaffSalaryDeduction, MonthlyStaffSalaryDeduction
 
 
 class ShiftViewTests(TestCase):
@@ -188,7 +188,7 @@ class ShiftViewTests(TestCase):
         )
 
         staff.refresh_from_db()
-        staff_deduction = StaffSalaryDeduction.objects.get(staff=staff, deduction=deduction)
+        staff_deduction = MonthlyStaffSalaryDeduction.objects.get(staff=staff, deduction=deduction)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(staff.hourly_wage, 1300)
         self.assertTrue(staff_deduction.is_active)
@@ -1184,3 +1184,39 @@ class SalaryDetailTests(TestCase):
         self.assertIsNone(details[2]['start'])
         self.assertContains(response, f'data-salary-detail="salary-detail-{staff.pk}"')
         self.assertContains(response, '08:30\u301c17:16')
+
+
+class MonthlyAdjustmentTests(TestCase):
+    def test_personal_adjustments_are_month_specific(self):
+        from datetime import date
+        staff = Staff.objects.create(name='Test', hourly_wage=1000)
+        deduction = SalaryDeduction.objects.create(name='Adjustment', amount_type='variable', direction='add')
+        StaffSalaryDeduction.objects.create(staff=staff, deduction=deduction, amount=100, is_active=True)
+        url = reverse('staff_salary_settings', args=[staff.pk])
+        for month, amount, active in [('2026-08', '300', True), ('2026-09', '500', False)]:
+            data = {'hourly_wage': '1000', f'deduction_amount_{deduction.pk}': amount}
+            if active:
+                data[f'deduction_active_{deduction.pk}'] = 'on'
+            self.assertEqual(self.client.post(url + '?month=' + month, data).status_code, 302)
+        self.assertEqual(StaffSalaryDeduction.objects.get(staff=staff, deduction=deduction).amount, 100)
+        for month, expected in [('2026-08', '+300'), ('2026-09', '\u00b10'), ('2026-10', '+100')]:
+            row = self.client.get(reverse('salary_list'), {'month': month}).context['rows'][0]
+            self.assertEqual(row['adjustment_amount'], expected + '\u5186')
+        rows = self.client.get(url, {'month': '2026-08'}).context['rows']
+        self.assertEqual(rows[0]['amount'], 300)
+        self.assertTrue(rows[0]['is_active'])
+        self.client.post(url + '?month=2026-08', {'hourly_wage': '1000', f'deduction_amount_{deduction.pk}': '400', f'deduction_active_{deduction.pk}': 'on'})
+        self.assertEqual(MonthlyStaffSalaryDeduction.objects.count(), 2)
+        self.assertEqual(MonthlyStaffSalaryDeduction.objects.get(month=date(2026, 9, 1)).amount, 500)
+
+    def test_saved_fixed_amount_survives_global_amount_change(self):
+        staff = Staff.objects.create(name='Test')
+        deduction = SalaryDeduction.objects.create(name='Fixed', amount_type='fixed', fixed_amount=200)
+        self.client.post(reverse('staff_salary_settings', args=[staff.pk]) + '?month=2026-08', {
+            f'deduction_active_{deduction.pk}': 'on',
+        })
+        deduction.fixed_amount = 900
+        deduction.save()
+        for month, expected in [('2026-08', '-200'), ('2026-09', '-900')]:
+            row = self.client.get(reverse('salary_list'), {'month': month}).context['rows'][0]
+            self.assertEqual(row['adjustment_amount'], expected + '\u5186')

@@ -147,6 +147,17 @@ class StaffSalaryDeduction(models.Model):
         return f'{self.staff} {self.deduction}: {self.amount}'
 
 
+class MonthlyStaffSalaryDeduction(models.Model):
+    staff = models.ForeignKey(Staff, on_delete=models.CASCADE, related_name='monthly_salary_deductions')
+    deduction = models.ForeignKey(SalaryDeduction, on_delete=models.CASCADE, related_name='monthly_staff_amounts')
+    month = models.DateField('対象月')
+    amount = models.PositiveIntegerField('金額', default=0)
+    is_active = models.BooleanField('適用', default=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['staff', 'deduction', 'month'], name='unique_staff_deduction_month')]
+
+
 class ShiftType(models.Model):
     code = models.CharField('区分', max_length=8, choices=SHIFT_TYPE_CODES, unique=True)
     color = models.CharField('色', max_length=7, choices=SHIFT_TYPE_COLORS + LEAVE_TYPE_COLORS, unique=True, blank=True, null=True)

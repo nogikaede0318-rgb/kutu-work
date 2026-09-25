@@ -24,7 +24,6 @@
                         <th>実働終了</th>
                         <th>休憩（分）</th>
                         <th>休み</th>
-                        <th>予定どおり</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -34,7 +33,8 @@
                             <td>{{ row.planned_label }}</td>
                             <td>
                                 <select name="actual_type_{{ row.staff.pk }}" data-actual-type aria-label="{{ row.staff.name }}さんの実働区分">
-                                    <option value="" data-start="{{ row.shift.start_time|time:'H:i' }}" data-end="{{ row.shift.end_time|time:'H:i' }}" data-break="{{ row.shift.planned_break_minutes|default:0 }}" data-leave="{{ row.is_day_off|yesno:'true,false' }}">予定どおり</option>
+                                    <option value="" data-manual="true">予定区分（時刻は手入力）</option>
+                                    <option value="__planned__" data-start="{{ row.shift.start_time|time:'H:i' }}" data-end="{{ row.shift.end_time|time:'H:i' }}" data-break="{{ row.shift.planned_break_minutes|default:0 }}" data-leave="{{ row.is_day_off|yesno:'true,false' }}">予定どおり</option>
                                     {% for type in shift_types %}
                                         <option value="{{ type.pk }}" data-start="{{ type.start_time|time:'H:i' }}" data-end="{{ type.end_time|time:'H:i' }}" data-break="{{ type.break_minutes|default:0 }}" data-leave="{{ type.is_leave|yesno:'true,false' }}" {% if row.actual_type_id == type.pk|stringformat:'s' %}selected{% endif %}>{{ type }}</option>
                                     {% endfor %}
@@ -63,15 +63,6 @@
                                 <input type="hidden" name="actual_day_off_{{ row.staff.pk }}" value="{% if row.actual_day_off %}1{% else %}0{% endif %}" data-actual-day-off>
                                 <button type="button" class="day-off-button" data-actual-off-button aria-pressed="{% if row.actual_day_off %}true{% else %}false{% endif %}">休</button>
                             </td>
-                            <td>
-                                <button type="button" class="outline-button" data-actual-unchanged aria-pressed="false"
-                                    data-planned-start="{{ row.shift.start_time|time:'H:i' }}"
-                                    data-planned-end="{{ row.shift.end_time|time:'H:i' }}"
-                                    data-planned-break="{{ row.shift.planned_break_minutes|default:0 }}"
-                                    data-planned-off="{% if row.is_day_off %}1{% else %}0{% endif %}"
-                                    {% if not row.is_day_off %}{% if not row.shift.start_time or not row.shift.end_time %}disabled title="予定が登録されていません"{% endif %}{% endif %}
-                                >変更なし</button>
-                            </td>
                         </tr>
                     {% endfor %}
                 </tbody>
@@ -87,13 +78,19 @@
 {% block scripts %}
     <script>
         document.querySelectorAll('[data-actual-type]').forEach((select) => {
+            const row = select.closest('[data-actual-row]');
+            row.querySelectorAll('input[type="time"], input[name^="actual_break_"]').forEach((input) => {
+                input.addEventListener('input', () => {
+                    if (select.value === '__planned__') select.value = '';
+                });
+            });
             select.addEventListener('change', () => {
                 const row = select.closest('[data-actual-row]');
                 const option = select.selectedOptions[0];
+                if (option.dataset.manual) return;
                 const isOff = option.dataset.leave === 'true';
                 row.querySelector('[data-actual-day-off]').value = isOff ? '1' : '0';
                 row.querySelector('[data-actual-off-button]').setAttribute('aria-pressed', String(isOff));
-                row.querySelector('[data-actual-unchanged]').setAttribute('aria-pressed', 'false');
                 row.classList.toggle('actual-day-off', isOff);
                 for (const [name, value] of [['actual_start_', option.dataset.start], ['actual_end_', option.dataset.end], ['actual_break_', option.dataset.break]]) {
                     const input = row.querySelector(`input[name^="${name}"]`);
@@ -101,31 +98,6 @@
                     input.disabled = isOff;
                     input.dataset.previousValue = input.value;
                 }
-            });
-        });
-        document.querySelectorAll('[data-actual-unchanged]').forEach((button) => {
-            const row = button.closest('[data-actual-row]');
-            row.querySelectorAll('input[type="time"], input[name^="actual_break_"]').forEach((input) => {
-                input.addEventListener('input', () => button.setAttribute('aria-pressed', 'false'));
-            });
-            button.addEventListener('click', () => {
-                button.setAttribute('aria-pressed', 'true');
-                const row = button.closest('[data-actual-row]');
-                row.querySelector('[data-actual-type]').value = '';
-                const isOff = button.dataset.plannedOff === '1';
-                row.querySelector('[data-actual-day-off]').value = isOff ? '1' : '0';
-                row.querySelector('[data-actual-off-button]').setAttribute('aria-pressed', String(isOff));
-                row.classList.toggle('actual-day-off', isOff);
-                const start = row.querySelector('input[name^="actual_start_"]');
-                const end = row.querySelector('input[name^="actual_end_"]');
-                start.value = isOff ? '' : button.dataset.plannedStart;
-                end.value = isOff ? '' : button.dataset.plannedEnd;
-                const breakInput = row.querySelector('input[name^="actual_break_"]');
-                breakInput.value = isOff ? '' : button.dataset.plannedBreak;
-                [start, end, breakInput].forEach((input) => {
-                    input.disabled = isOff;
-                    input.dataset.previousValue = input.value;
-                });
             });
         });
         document.querySelectorAll('[data-actual-off-button]').forEach((button) => {
@@ -136,7 +108,6 @@
                 const isOff = state.value !== '1';
                 const typeSelect = row.querySelector('[data-actual-type]');
                 if (!isOff && typeSelect.selectedOptions[0]?.dataset.leave === 'true') typeSelect.value = '';
-                row.querySelector('[data-actual-unchanged]').setAttribute('aria-pressed', 'false');
                 state.value = isOff ? '1' : '0';
                 button.setAttribute('aria-pressed', String(isOff));
                 row.classList.toggle('actual-day-off', isOff);

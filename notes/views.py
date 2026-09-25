@@ -24,6 +24,7 @@ from .models import (
     ShiftType,
     Staff,
     StaffSalaryDeduction,
+    MonthlyStaffSalaryDeduction,
     MonthlyPaidLeave,
     StaffWageHistory,
 )
@@ -219,6 +220,10 @@ def salary_list(request):
         (staff_amount.staff_id, staff_amount.deduction_id): staff_amount
         for staff_amount in StaffSalaryDeduction.objects.select_related('deduction', 'staff')
     }
+    staff_deduction_settings.update({
+        (item.staff_id, item.deduction_id): item
+        for item in MonthlyStaffSalaryDeduction.objects.filter(month=first_day)
+    })
 
     rows = []
     total_minutes = 0
@@ -366,6 +371,8 @@ def staff_salary_settings(request, pk):
         staff_amount.deduction_id: staff_amount
         for staff_amount in StaffSalaryDeduction.objects.filter(staff=staff)
     }
+    staff_settings.update({item.deduction_id: item for item in
+                           MonthlyStaffSalaryDeduction.objects.filter(staff=staff, month=return_month)})
 
     if request.method == 'POST':
         if has_periods:
@@ -405,12 +412,13 @@ def staff_salary_settings(request, pk):
             if has_paid_leave_data:
                 paid_leave_form.save()
             for deduction in deductions:
-                staff_amount, _created = StaffSalaryDeduction.objects.get_or_create(
+                staff_amount, _created = MonthlyStaffSalaryDeduction.objects.get_or_create(
                     staff=staff,
                     deduction=deduction,
+                    month=return_month,
                 )
                 staff_amount.is_active = request.POST.get(f'deduction_active_{deduction.id}') == 'on'
-                amount_value = request.POST.get(f'deduction_amount_{deduction.id}', '').strip() if deduction.amount_type == 'variable' else str(staff_amount.amount)
+                amount_value = request.POST.get(f'deduction_amount_{deduction.id}', '').strip() if deduction.amount_type == 'variable' else str(_deduction_amount(staff_settings.get(deduction.id), deduction))
                 try:
                     amount = int(amount_value or 0)
                 except ValueError:
@@ -423,7 +431,7 @@ def staff_salary_settings(request, pk):
     rows = [
         {
             'deduction': deduction,
-            'amount': deduction.fixed_amount if deduction.amount_type == 'fixed' else staff_settings.get(deduction.id).amount if deduction.id in staff_settings else 0,
+            'amount': _deduction_amount(staff_settings.get(deduction.id), deduction),
             'is_active': _salary_deduction_is_active(staff_settings.get(deduction.id), deduction),
             'is_fixed': deduction.amount_type == 'fixed',
             'direction_label': deduction.get_direction_display(),
@@ -807,15 +815,20 @@ def _staff_salary_adjustment_total(staff, deductions, staff_deduction_settings):
         staff_setting = staff_deduction_settings.get((staff.id, deduction.id))
         if not _salary_deduction_is_active(staff_setting, deduction):
             continue
-        if deduction.amount_type == 'fixed':
-            amount = deduction.fixed_amount
-        else:
-            amount = staff_setting.amount if staff_setting else 0
+        amount = _deduction_amount(staff_setting, deduction)
         if deduction.direction == 'add':
             total += amount
         else:
             total -= amount
     return total
+
+
+def _deduction_amount(staff_setting, deduction):
+    if isinstance(staff_setting, MonthlyStaffSalaryDeduction):
+        return staff_setting.amount
+    if deduction.amount_type == 'fixed':
+        return deduction.fixed_amount
+    return staff_setting.amount if staff_setting else 0
 
 
 def _salary_deduction_is_active(staff_setting, deduction):
@@ -1078,6 +1091,8 @@ def _save_actual_work_times(request, work_date, staff_members, existing_shifts):
         selected_type = shift.actual_shift_type if shift else None
         if f'actual_type_{staff.id}' in request.POST:
             type_id = request.POST.get(f'actual_type_{staff.id}', '')
+            if type_id == '__planned__':
+                type_id = ''
             selected_type = types.get(type_id)
             if type_id and selected_type is None:
                 messages.error(request, f'{staff.name}さんの実働区分を選び直してください。')

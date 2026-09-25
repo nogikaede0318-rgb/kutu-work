@@ -28,7 +28,8 @@
             </fieldset>
 
             <fieldset class="settings-card">
-                <legend>加減項目</legend>
+                <legend>{{ return_month|date:'Y年n月' }}の加減項目</legend>
+                <p>適用と金額はこの月だけに保存します。未設定の月は共通設定を使います。</p>
             <div class="salary-item-list">
                 {% for row in rows %}
                     <div class="salary-item-row">
