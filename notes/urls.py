@@ -8,6 +8,7 @@ urlpatterns = [
     path('staff/', views.staff_list, name='staff_list'),
     path('staff/new/', views.staff_create, name='staff_create'),
     path('staff/<int:pk>/edit/', views.staff_update, name='staff_update'),
+    path('staff/<int:pk>/salary-visibility/', views.staff_salary_visibility, name='staff_salary_visibility'),
     path('salary/', views.salary_list, name='salary_list'),
     path('salary/settings/', views.salary_settings, name='salary_settings'),
     path('salary/staff/<int:pk>/settings/', views.staff_salary_settings, name='staff_salary_settings'),

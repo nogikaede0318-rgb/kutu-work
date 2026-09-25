@@ -1220,3 +1220,23 @@ class MonthlyAdjustmentTests(TestCase):
         for month, expected in [('2026-08', '-200'), ('2026-09', '-900')]:
             row = self.client.get(reverse('salary_list'), {'month': month}).context['rows'][0]
             self.assertEqual(row['adjustment_amount'], expected + '\u5186')
+
+
+class SalaryVisibilityTests(TestCase):
+    def test_staff_can_be_hidden_and_restored_without_losing_shifts(self):
+        staff = Staff.objects.create(name='Test', hourly_wage=1200)
+        shift = Shift.objects.create(staff=staff, work_date='2026-09-18', start_time='09:00', end_time='10:00')
+        url = reverse('staff_salary_visibility', args=[staff.pk])
+        self.assertEqual(self.client.get(url).status_code, 405)
+        response = self.client.post(url, {'show_in_salary': '0', 'year': '2026'})
+        self.assertRedirects(response, reverse('staff_list') + '?year=2026')
+        response = self.client.get(reverse('salary_list'), {'month': '2026-09'})
+        self.assertEqual(response.context['rows'], [])
+        self.assertEqual(response.context['total_gross_amount'], '0\u5186')
+        self.assertTrue(Shift.objects.filter(pk=shift.pk).exists())
+        self.assertContains(self.client.get(reverse('staff_list')), 'Test')
+        self.assertContains(self.client.get(reverse('shift_table'), {'month': '2026-09'}), 'Test')
+        self.client.post(url, {'show_in_salary': '1', 'year': '2026'})
+        response = self.client.get(reverse('salary_list'), {'month': '2026-09'})
+        self.assertEqual(len(response.context['rows']), 1)
+        self.assertEqual(response.context['total_gross_amount'], '1,200\u5186')

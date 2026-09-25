@@ -21,6 +21,12 @@
                         <a class="outline-button" href="{% url 'staff_update' row.staff.pk %}">編集</a>
                         <button class="link-button" type="button" data-modal-target="staff-stats-{{ row.staff.pk }}">稼働状況</button>
                     </div>
+                    <form method="post" action="{% url 'staff_salary_visibility' row.staff.pk %}" class="salary-visibility-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="year" value="{{ selected_year }}">
+                        <span>給料一覧</span>
+                        <button type="submit" class="outline-button" name="show_in_salary" value="{% if row.staff.show_in_salary %}0{% else %}1{% endif %}" aria-label="{{ row.staff.name }}さんを給料一覧で{% if row.staff.show_in_salary %}非表示にする{% else %}表示する{% endif %}">{% if row.staff.show_in_salary %}表示中{% else %}非表示{% endif %}</button>
+                    </form>
                 </article>
 
                 <dialog id="staff-stats-{{ row.staff.pk }}" class="stats-modal">

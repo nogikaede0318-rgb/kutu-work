@@ -55,6 +55,7 @@ SALARY_AMOUNT_DIRECTIONS = [
 
 
 class Staff(models.Model):
+    show_in_salary = models.BooleanField('給料一覧に表示', default=True)
     management_number = models.CharField('管理番号', max_length=2, unique=True, blank=True, null=True)
     name = models.CharField('名前', max_length=80, unique=True)
     hourly_wage = models.PositiveIntegerField('平日時給', default=0)

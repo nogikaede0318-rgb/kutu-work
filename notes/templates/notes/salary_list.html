@@ -8,6 +8,7 @@
         <div class="shift-toolbar">
             <div class="shift-action-nav">
                 <a class="button" href="{% url 'salary_settings' %}?month={{ selected_month|date:'Y-m' }}">設定</a>
+                <button type="button" class="print-button" data-salary-print>印刷</button>
             </div>
             <div class="month-nav">
                 <a href="{% url 'salary_list' %}?month={{ previous_month|date:'Y-m' }}">前月</a>
@@ -104,6 +105,7 @@
 
 {% block scripts %}
     <script>
+        document.querySelector('[data-salary-print]').addEventListener('click', () => window.print());
         document.querySelectorAll('[data-salary-detail]').forEach((button) => {
             button.addEventListener('click', () => {
                 document.getElementById(button.dataset.salaryDetail).showModal();

@@ -5,6 +5,7 @@ from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 from django.db import transaction
 from django.core.exceptions import ValidationError
 from .forms import MonthlyPaidLeaveForm, WagePeriodFormSet
@@ -208,6 +209,16 @@ def staff_update(request, pk):
     return render(request, 'notes/staff_form.html', {'staff': staff, 'wage_periods': wage_periods})
 
 
+@require_POST
+def staff_salary_visibility(request, pk):
+    staff = get_object_or_404(Staff, pk=pk)
+    staff.show_in_salary = request.POST.get('show_in_salary') == '1'
+    staff.save(update_fields=['show_in_salary'])
+    messages.success(request, '給料一覧の表示設定を保存しました。')
+    year = _parse_year(request.POST.get('year'))
+    return redirect(f'{reverse("staff_list")}?year={year}')
+
+
 def salary_list(request):
     selected_month = _parse_month(request.GET.get('month'))
     first_day = selected_month.replace(day=1)
@@ -234,7 +245,7 @@ def salary_list(request):
     paid_leave_by_staff = {
         leave.staff_id: leave for leave in MonthlyPaidLeave.objects.filter(month=first_day).select_related('staff')
     }
-    for staff in Staff.objects.all():
+    for staff in Staff.objects.filter(show_in_salary=True):
         staff_minutes = 0
         weekday_minutes = 0
         holiday_minutes = 0
