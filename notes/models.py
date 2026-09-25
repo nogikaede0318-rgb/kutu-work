@@ -126,6 +126,16 @@ class SalaryDeduction(models.Model):
 
 
 class StaffSalaryDeduction(models.Model):
+    reset_from_month = models.DateField('リセット開始月', blank=True, null=True)
+
+    def for_month(self, month):
+        if self.reset_from_month and month >= self.reset_from_month:
+            return MonthlyStaffSalaryDeduction(
+                staff_id=self.staff_id, deduction_id=self.deduction_id,
+                month=month, amount=0, is_active=False,
+            )
+        return self
+
     staff = models.ForeignKey(Staff, verbose_name='スタッフ', on_delete=models.CASCADE, related_name='salary_deductions')
     deduction = models.ForeignKey(
         SalaryDeduction,

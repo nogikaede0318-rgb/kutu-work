@@ -5,6 +5,23 @@ from .models import SalaryDeduction, Shift, ShiftType, Staff, StaffSalaryDeducti
 
 
 class ShiftViewTests(TestCase):
+    def test_adjustment_reset_preserves_past_and_allows_month_override(self):
+        staff = Staff.objects.create(name='Reset test')
+        deduction = SalaryDeduction.objects.create(name='Allowance', amount_type='variable', direction='add')
+        StaffSalaryDeduction.objects.create(
+            staff=staff, deduction=deduction, amount=1000, is_active=True,
+            reset_from_month='2026-10-01',
+        )
+        for month, expected in [('2026-09', 1000), ('2026-10', 0), ('2028-01', 0)]:
+            response = self.client.get(reverse('salary_list'), {'month': month})
+            from .views import _format_yen
+            self.assertEqual(response.context['rows'][0]['adjustment_amount'], _format_yen(expected, signed=True))
+        MonthlyStaffSalaryDeduction.objects.create(
+            staff=staff, deduction=deduction, month='2026-11-01', amount=500, is_active=True,
+        )
+        response = self.client.get(reverse('salary_list'), {'month': '2026-11'})
+        self.assertEqual(response.context['rows'][0]['adjustment_amount'], _format_yen(500, signed=True))
+
     def setUp(self):
         ShiftType.objects.all().delete()
 

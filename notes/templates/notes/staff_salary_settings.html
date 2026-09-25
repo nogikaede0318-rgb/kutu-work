@@ -18,7 +18,7 @@
 
             <fieldset class="settings-card">
                 <legend>{{ return_month|date:'Y年n月' }}の有給</legend>
-                <p>平日時給 × 1日あたりの時間 × 有給日数を総支給額に加算します。実働時間には含めません。</p>
+                <p>平日時給 × 1日あたりの時間 × 有給日数を支給額に加算します。実働時間には含めません。</p>
                 {{ paid_leave_form.non_field_errors }}
                 <div class="wage-rate-pair">
                     {% for field in paid_leave_form %}

@@ -228,7 +228,7 @@ def salary_list(request):
     shifts = Shift.objects.filter(work_date__range=(first_day, last_day)).select_related('shift_type', 'staff', 'actual_shift_type')
     deductions = SalaryDeduction.objects.all()
     staff_deduction_settings = {
-        (staff_amount.staff_id, staff_amount.deduction_id): staff_amount
+        (staff_amount.staff_id, staff_amount.deduction_id): staff_amount.for_month(first_day)
         for staff_amount in StaffSalaryDeduction.objects.select_related('deduction', 'staff')
     }
     staff_deduction_settings.update({
@@ -379,7 +379,7 @@ def staff_salary_settings(request, pk):
     wage_periods = _wage_period_formset(request, staff, return_month)
     deductions = SalaryDeduction.objects.all()
     staff_settings = {
-        staff_amount.deduction_id: staff_amount
+        staff_amount.deduction_id: staff_amount.for_month(return_month)
         for staff_amount in StaffSalaryDeduction.objects.filter(staff=staff)
     }
     staff_settings.update({item.deduction_id: item for item in
